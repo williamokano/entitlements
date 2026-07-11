@@ -32,9 +32,26 @@ func (r *Router) HandleFunc(pattern string, h http.HandlerFunc) {
 // the handler sees the request. A request to "<prefix>/foo" reaches h as
 // "/foo", so modules register prefix-relative routes and the composition root
 // decides where they live.
+//
+// Both the exact prefix and its subtree are registered, so a module's
+// collection endpoint at its root (e.g. "POST /") is reachable at "<prefix>"
+// itself without a trailing-slash redirect that would drop the request body.
 func (r *Router) Mount(prefix string, h http.Handler) {
 	prefix = "/" + strings.Trim(prefix, "/")
-	r.mux.Handle(prefix+"/", http.StripPrefix(prefix, h))
+	stripped := http.StripPrefix(prefix, ensureLeadingSlash(h))
+	r.mux.Handle(prefix, stripped)
+	r.mux.Handle(prefix+"/", stripped)
+}
+
+// ensureLeadingSlash restores the "/" that StripPrefix removes when the request
+// path equals the mount prefix exactly, so the module's root routes match.
+func ensureLeadingSlash(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "" {
+			r.URL.Path = "/"
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 // Handler returns the composed http.Handler: the mux wrapped in the router's

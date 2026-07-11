@@ -212,6 +212,45 @@ func TestRouterCompositionMountsUnderPrefix(t *testing.T) {
 	}
 }
 
+func TestRouterMountServesCollectionAtPrefixRoot(t *testing.T) {
+	// A module whose collection endpoint is at its root ("POST /") must be
+	// reachable at the bare prefix without a trailing-slash redirect that would
+	// drop the request body.
+	module := http.NewServeMux()
+	module.HandleFunc("POST /", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	})
+	module.HandleFunc("GET /{id}", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, r.PathValue("id"))
+	})
+
+	router := httpx.NewRouter()
+	router.Mount("/api/v1/things", module)
+	srv := httptest.NewServer(router.Handler())
+	defer srv.Close()
+
+	// POST to the bare prefix — no redirect, body preserved.
+	resp, err := http.Post(srv.URL+"/api/v1/things", "application/json", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatalf("POST bare prefix: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("POST /api/v1/things = %d, want 201 (no redirect)", resp.StatusCode)
+	}
+
+	// Sub-resource still routes with the prefix stripped.
+	got, err := http.Get(srv.URL + "/api/v1/things/42")
+	if err != nil {
+		t.Fatalf("GET sub-resource: %v", err)
+	}
+	body, _ := io.ReadAll(got.Body)
+	_ = got.Body.Close()
+	if string(body) != "42" {
+		t.Fatalf("sub-resource id = %q, want 42", body)
+	}
+}
+
 func TestGracefulShutdownDrainsInflightRequests(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})
