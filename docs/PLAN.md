@@ -50,19 +50,24 @@ Makefile                         # build, test, lint, sqlc gen, migrate
 
 ```
 modules/<name>/
-  domain/          # entities, value objects, domain events, domain services, repository interfaces
-  app/             # use cases (command/query handlers); owns transaction boundaries
   ports/           # PUBLIC surface for other modules: facade interface + published event types
-  adapters/
-    http/          # REST handlers (driving adapter)
-    postgres/      # repository implementations via sqlc (driven adapter)
-  module.go        # Wire(deps) — constructs the module, returns its port + http.Handler + event subscriptions
+  internal/        # compiler-private to this module (Go internal/ visibility)
+    domain/        # entities, value objects, domain events, domain services, repository interfaces
+    service/       # use cases (command/query handlers); owns transaction boundaries
+    adapters/
+      rest/        # REST handlers (driving adapter)
+      postgres/    # repository implementations (driven adapter)
+  module.go        # New(app.Deps) *Module — returns its port + http.Handler + event subscriptions
 ```
 
-**Enforced rules** (via `depguard`/`go-arch-lint` in CI):
-- `domain` imports nothing from other layers or modules.
-- Modules never import another module's `domain`/`app`/`adapters` — only its `ports` package.
-- Each module owns its own tables (one Postgres schema per module: `tenant.*`, `billing.*`, …). No cross-module joins; read-your-own-data or call the port.
+**Enforced rules**:
+- **Cross-module privacy (compiler-enforced):** `domain`/`service`/`adapters` live under the module's `internal/` directory, so the Go compiler forbids any other module from importing them — a module reaches another module only through its public `ports` package.
+- **Domain purity (depguard):** a module's `domain` package may import only the standard library, `uuid`, and `platform/apperr` — never service/adapters, the platform kernel, or other modules.
+- **Platform isolation (depguard):** the platform kernel must not import business modules or the composition layer (`internal/app`).
+- A CI self-test (`scripts/archcheck.sh`) writes a deliberately illegal import and asserts `make lint` fails, proving the rules actually bite.
+- Each module owns its own Postgres schema (`tenant.*`, `billing.*`, …). No cross-module joins; read-your-own-data or call the port.
+
+**Composition root** (`cmd/api`): `config → observability → Postgres pool → migrations → build `app.Deps` → wire each `app.Module` (mount its handler under `/api/v1/<name>`, register its subscriptions on the bus) → start the outbox relay + job runner → serve`. The `example` module is a bootable reference implementation of this pattern (delete it and `migrations/example/` for a real SaaS).
 
 ## Module Specifications
 

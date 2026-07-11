@@ -1,13 +1,17 @@
 # golangci-lint configuration (v2 schema).
 #
-# T-001 enables a standard, broadly-agreed set of linters. The default v2 set
-# already includes errcheck, govet, ineffassign, staticcheck, and unused; we
-# add revive and depguard on top.
+# The default v2 linter set already includes errcheck, govet, ineffassign,
+# staticcheck, and unused; we add revive and depguard on top.
 #
-# The architectural import rules (domain imports nothing; modules reach other
-# modules only via their ports package) are enforced by depguard and are
-# filled in by T-009 — the depguard block below is intentionally permissive
-# for now.
+# Architecture enforcement (see docs/PLAN.md "Enforced rules"):
+#   - Domain purity: a module's domain package may import only the standard
+#     library, uuid, and the platform error taxonomy — never the service or
+#     adapter layers, the platform kernel, or other modules. (depguard, below)
+#   - Platform isolation: the platform kernel must not depend on business
+#     modules or the composition layer. (depguard, below)
+#   - Modules reach other modules only through their public `ports` package:
+#     each module's domain/service/adapters live under its internal/ directory,
+#     so the Go compiler forbids cross-module imports of them. (compiler)
 
 version: "2"
 
@@ -18,13 +22,26 @@ linters:
   settings:
     depguard:
       rules:
-        # Placeholder rule set. T-009 replaces this with the real architecture
-        # boundaries (per docs/PLAN.md "Enforced rules").
-        main:
-          list-mode: lax
+        # A module's domain layer is pure.
+        domain:
+          list-mode: strict
+          files:
+            - "**/internal/domain/**"
           allow:
             - $gostd
-            - github.com/williamokano/entitlements
+            - github.com/google/uuid
+            - github.com/williamokano/entitlements/internal/platform/apperr
+        # The platform kernel is the shared foundation and depends on neither
+        # business modules nor the composition layer.
+        platform:
+          list-mode: lax
+          files:
+            - "**/internal/platform/**"
+          deny:
+            - pkg: github.com/williamokano/entitlements/internal/modules
+              desc: platform is the shared kernel and must not depend on business modules
+            - pkg: github.com/williamokano/entitlements/internal/app
+              desc: platform must not depend on the composition layer
   exclusions:
     rules:
       # doc.go stubs carry package documentation only.

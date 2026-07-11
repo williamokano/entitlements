@@ -177,8 +177,8 @@ graph TD
 - `TestExpiredKeyReexecutes` — frozen clock past TTL → handler runs again.
 - unit: `TestGETRequestsBypassIdempotency`.
 
-### T-009 · Module wiring pattern + composition root + arch enforcement · **M**
-**Depends on**: T-004, T-005.
+### T-009 · Module wiring pattern + composition root + arch enforcement · **M** · ✅ DONE (PR #10)
+**Depends on**: T-004, T-005. Module boundaries are compiler-enforced via Go `internal/` (domain/service/adapters private; only `ports` public); depguard enforces domain purity + platform isolation; `scripts/archcheck.sh` self-tests the guard.
 **Deliverables**: `Module` contract — `module.go` exposes `Wire(Deps) (Ports, http.Handler, []events.Subscription)`; `cmd/api/main.go` composition root (config → postgres → migrations → bus/relay → jobs → mount modules → serve); a minimal `example` module (one entity, one endpoint, one event) proving the pattern end-to-end, kept as living documentation; finalize `depguard` rules from PLAN.md "Enforced rules"; `scripts/archcheck.sh` self-test that verifies the lint actually rejects illegal imports.
 **Acceptance criteria**: `make run` boots the full composition root; the example module works over real HTTP + outbox; an illegal cross-module import fails `make lint` (proven by the self-test, not by trust).
 **Expected tests**:

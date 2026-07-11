@@ -47,6 +47,9 @@ jobs:
       - name: Lint
         run: make lint
 
+      - name: Architecture check (illegal import must fail lint)
+        run: make archcheck
+
       - name: Test
         run: make test
 

@@ -40,6 +40,10 @@ tidy: ## Tidy and verify go.mod / go.sum
 	$(GO) mod tidy
 	$(GO) mod verify
 
+.PHONY: archcheck
+archcheck: ## Prove the architecture lint rejects an illegal import
+	./scripts/archcheck.sh
+
 .PHONY: lint
 lint: ## Run golangci-lint (falls back to go vet if not installed)
 	@if command -v $(GOLANGCI_LINT) >/dev/null 2>&1; then \

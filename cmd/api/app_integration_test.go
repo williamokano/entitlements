@@ -1,0 +1,131 @@
+//go:build integration
+
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/google/uuid"
+
+	"github.com/williamokano/entitlements/internal/platform/config"
+	"github.com/williamokano/entitlements/internal/platform/testkit"
+)
+
+func testApp(t *testing.T) *application {
+	t.Helper()
+	pool := testkit.Postgres(t)
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	return buildApplication(config.Config{Environment: config.EnvDevelopment}, pool, logger)
+}
+
+func TestCompositionRootBootsAndServesHealthz(t *testing.T) {
+	a := testApp(t)
+	srv := httptest.NewServer(a.handler)
+	defer srv.Close()
+
+	for _, path := range []string{"/healthz", "/readyz"} {
+		resp, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET %s: status = %d, want 200", path, resp.StatusCode)
+		}
+		if resp.Header.Get("X-Request-Id") == "" {
+			t.Fatalf("GET %s: missing X-Request-Id (middleware chain not wired)", path)
+		}
+	}
+}
+
+func TestExampleModuleEndpointPersistsAndResponds(t *testing.T) {
+	a := testApp(t)
+	srv := httptest.NewServer(a.handler)
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/api/v1/example/things", "application/json",
+		strings.NewReader(`{"name":"widget"}`))
+	if err != nil {
+		t.Fatalf("POST: %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d, want 201 (body %s)", resp.StatusCode, body)
+	}
+	var created struct {
+		ID   uuid.UUID `json:"id"`
+		Name string    `json:"name"`
+	}
+	if err := json.Unmarshal(body, &created); err != nil {
+		t.Fatalf("decode: %v (%s)", err, body)
+	}
+	if created.Name != "widget" || created.ID == uuid.Nil {
+		t.Fatalf("response = %+v, want name=widget and a non-nil id", created)
+	}
+
+	// The row is persisted and readable back through the module.
+	getResp, err := http.Get(srv.URL + "/api/v1/example/things/" + created.ID.String())
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	getBody, _ := io.ReadAll(getResp.Body)
+	_ = getResp.Body.Close()
+	if getResp.StatusCode != http.StatusOK || !strings.Contains(string(getBody), "widget") {
+		t.Fatalf("GET thing = %d %s, want 200 containing widget", getResp.StatusCode, getBody)
+	}
+}
+
+func TestExampleModuleEventFlowsThroughOutboxToConsumer(t *testing.T) {
+	a := testApp(t)
+	srv := httptest.NewServer(a.handler)
+	defer srv.Close()
+	ctx := context.Background()
+
+	resp, err := http.Post(srv.URL+"/api/v1/example/things", "application/json",
+		strings.NewReader(`{"name":"eventful"}`))
+	if err != nil {
+		t.Fatalf("POST: %v", err)
+	}
+	var created struct {
+		ID uuid.UUID `json:"id"`
+	}
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if err := json.Unmarshal(body, &created); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	// The relay delivers the outbox event to the module's consumer, which marks
+	// the thing processed exactly once.
+	published, err := a.relay.ProcessBatch(ctx)
+	if err != nil {
+		t.Fatalf("relay ProcessBatch: %v", err)
+	}
+	if published != 1 {
+		t.Fatalf("relay published %d events, want 1", published)
+	}
+
+	// A second pass finds nothing new, and the idempotent consumer keeps the
+	// count at exactly one.
+	if _, err := a.relay.ProcessBatch(ctx); err != nil {
+		t.Fatalf("relay ProcessBatch #2: %v", err)
+	}
+
+	var processCount int
+	if err := a.pool.QueryRow(ctx,
+		`SELECT process_count FROM example.things WHERE id = $1`, created.ID).Scan(&processCount); err != nil {
+		t.Fatalf("read process_count: %v", err)
+	}
+	if processCount != 1 {
+		t.Fatalf("process_count = %d, want exactly 1 (outbox → consumer)", processCount)
+	}
+}
