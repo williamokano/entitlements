@@ -165,7 +165,7 @@ graph TD
 - unit: `TestHTTPMiddlewareCreatesSpanPerRequest` — in-memory span exporter records one span with route + status.
 - unit: `TestUnknownLogLevelFallsBackToInfo`.
 
-### T-008 · `platform/httpx` idempotency-key middleware · **S**
+### T-008 · `platform/httpx` idempotency-key middleware · **S** · ✅ DONE (PR #9)
 **Depends on**: T-003, T-004.
 **Deliverables**: middleware honoring `Idempotency-Key` on mutating methods: first call stores response (status + body hash) in `platform.idempotency_keys` keyed by (tenant, key, route) with TTL; replay returns the stored response without re-executing the handler; concurrent duplicate gets 409.
 **Acceptance criteria**: at-most-once handler execution per (tenant, key, route) within the TTL; GETs unaffected.

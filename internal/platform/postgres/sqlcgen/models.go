@@ -20,6 +20,18 @@ type PlatformAuditLog struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type PlatformIdempotencyKey struct {
+	TenantID    pgtype.UUID
+	IdemKey     string
+	Route       string
+	Completed   bool
+	StatusCode  pgtype.Int4
+	ContentType pgtype.Text
+	Body        []byte
+	CreatedAt   pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+}
+
 type PlatformJobRun struct {
 	ID         pgtype.UUID
 	JobName    string
