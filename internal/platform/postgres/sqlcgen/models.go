@@ -8,6 +8,15 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type PlatformJobRun struct {
+	ID         pgtype.UUID
+	JobName    string
+	StartedAt  pgtype.Timestamptz
+	FinishedAt pgtype.Timestamptz
+	Status     string
+	Error      pgtype.Text
+}
+
 type PlatformOutbox struct {
 	ID            pgtype.UUID
 	OccurredAt    pgtype.Timestamptz
