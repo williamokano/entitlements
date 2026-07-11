@@ -141,7 +141,7 @@ graph TD
 - integration: `TestTwoRelaysNoDoubleDispatch` — two concurrent relays over one outbox: each event dispatched once (SKIP LOCKED).
 - integration: `TestEventsDispatchedInPerTenantOrder` — ordering guarantee (at minimum: stable ordering by occurred_at within a tenant) documented and tested.
 
-### T-006 · `platform/jobs` — scheduler + locked runner · **M**
+### T-006 · `platform/jobs` — scheduler + locked runner · **M** · ✅ DONE (PR #7)
 **Depends on**: T-003.
 **Deliverables**: `jobs.Register(name, interval, fn)`; runner using Postgres advisory locks so exactly one instance executes a job across replicas; per-run timeout; panic isolation; last-run bookkeeping table; clock-driven so tests can use `Frozen`.
 **Acceptance criteria**: with N runners on one database, each due job executes exactly once per tick; a panicking or hanging job neither kills the runner nor blocks other jobs.
