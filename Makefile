@@ -27,8 +27,12 @@ run: ## Run the api server
 	$(GO) run ./cmd/api
 
 .PHONY: test
-test: ## Run all tests with the race detector
+test: ## Run unit tests with the race detector
 	$(GO) test -race ./...
+
+.PHONY: test-integration
+test-integration: ## Run unit + integration tests (testcontainers; requires Docker)
+	$(GO) test -race -tags integration ./...
 
 .PHONY: tidy
 tidy: ## Tidy and verify go.mod / go.sum
