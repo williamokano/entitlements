@@ -126,7 +126,7 @@ graph TD
 - `TestRouterCompositionMountsUnderPrefix` — module handler mounted at `/api/v1/x` receives stripped/full path as designed.
 - `TestGracefulShutdownDrainsInflightRequests` — in-flight request completes during `Shutdown`.
 
-### T-005 · `platform/events` — bus, transactional outbox, idempotent consumers · **L** ← the backbone
+### T-005 · `platform/events` — bus, transactional outbox, idempotent consumers · **L** ← the backbone · ✅ DONE (PR #6)
 **Depends on**: T-003.
 **Deliverables** (see PLAN.md "Outbox scope note"): `Event` envelope (uuidv7 ID, occurred_at, tenant_id, module, type, JSON payload); `Bus.Subscribe(eventType, handler)`; `Append(ctx, evt)` writing to `platform.outbox` inside the ambient UnitOfWork tx; relay worker polling `FOR UPDATE SKIP LOCKED` in batches, dispatching, marking `published_at`, incrementing `attempts` with backoff on failure; `platform.processed_events` + wrapper making any handler exactly-once-effective; synchronous-dispatch test helper for unit tests of consumers.
 **Acceptance criteria**: an event is atomically coupled to its business transaction; delivery is at-least-once and survives relay crashes; wrapped consumers are exactly-once-effective; two relays never double-dispatch.

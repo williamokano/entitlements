@@ -132,35 +132,41 @@ func TestMigrateDownReverts(t *testing.T) {
 	dsn := testkit.PostgresDSN(t)
 	ctx := context.Background()
 
-	if err := postgres.MigrateDown(ctx, dsn, "platform"); err != nil {
-		t.Fatalf("MigrateDown: %v", err)
-	}
-
 	pool, err := postgres.NewPool(ctx, dsn)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
 	defer pool.Close()
 
-	schemaExists := func() bool {
-		var exists bool
-		err := pool.QueryRow(ctx,
-			`SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'billing')`).Scan(&exists)
-		if err != nil {
-			t.Fatalf("check schema: %v", err)
+	// Current goose version for the platform module (migration-agnostic: this
+	// test stays correct as new platform migrations are added).
+	version := func() int64 {
+		var v int64
+		if err := pool.QueryRow(ctx,
+			`SELECT COALESCE(max(version_id), 0) FROM public.goose_platform_version WHERE is_applied`).
+			Scan(&v); err != nil {
+			t.Fatalf("read goose version: %v", err)
 		}
-		return exists
+		return v
 	}
 
-	if schemaExists() {
-		t.Fatal("billing schema still present after down migration")
+	before := version()
+	if before == 0 {
+		t.Fatal("no platform migrations applied before down")
 	}
 
-	// And MigrateUp restores it (round trip).
+	if err := postgres.MigrateDown(ctx, dsn, "platform"); err != nil {
+		t.Fatalf("MigrateDown: %v", err)
+	}
+	if after := version(); after >= before {
+		t.Fatalf("version after down = %d, want < %d", after, before)
+	}
+
+	// MigrateUp restores the latest version (round trip).
 	if err := postgres.MigrateUp(ctx, dsn); err != nil {
 		t.Fatalf("MigrateUp after down: %v", err)
 	}
-	if !schemaExists() {
-		t.Fatal("billing schema missing after re-applying migrations")
+	if restored := version(); restored != before {
+		t.Fatalf("version after re-up = %d, want %d", restored, before)
 	}
 }
