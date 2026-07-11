@@ -237,25 +237,40 @@ func TestLockReleasedAfterCrashAllowsNextRun(t *testing.T) {
 	}
 	connB.Release()
 
-	// Simulate a crash of A: terminate its session without unlocking. The
-	// session-scoped advisory lock must be released automatically.
-	hijacked := connA.Hijack()
-	if err := hijacked.Close(ctx); err != nil {
-		t.Fatalf("close hijacked A: %v", err)
+	// Capture A's backend PID so the crash can be made deterministic.
+	var pidA int
+	if err := connA.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&pidA); err != nil {
+		t.Fatalf("read A backend pid: %v", err)
 	}
 
-	// A fresh connection can now acquire the lock.
+	// Simulate a crash of A: close its connection without unlocking. Postgres
+	// releases a session's advisory locks when its backend terminates, but that
+	// happens asynchronously after the socket drops. Force-terminate the backend
+	// and then poll until the lock becomes acquirable, rather than assuming the
+	// release is instantaneous.
+	hijacked := connA.Hijack()
+	_ = hijacked.Close(ctx)
+
 	connC, err := pool.Acquire(ctx)
 	if err != nil {
 		t.Fatalf("acquire C: %v", err)
 	}
 	defer connC.Release()
+
+	_, _ = connC.Exec(ctx, `SELECT pg_terminate_backend($1)`, pidA)
+
 	var gotC bool
-	if err := connC.QueryRow(ctx, `SELECT pg_try_advisory_lock($1)`, key).Scan(&gotC); err != nil {
-		t.Fatalf("lock attempt on C: %v", err)
+	for waited := time.Duration(0); waited < 5*time.Second; waited += 50 * time.Millisecond {
+		if err := connC.QueryRow(ctx, `SELECT pg_try_advisory_lock($1)`, key).Scan(&gotC); err != nil {
+			t.Fatalf("lock attempt on C: %v", err)
+		}
+		if gotC {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 	if !gotC {
-		t.Fatal("lock not released after simulated crash of the holder")
+		t.Fatal("lock not released within 5s after simulated crash of the holder")
 	}
 	_, _ = connC.Exec(ctx, `SELECT pg_advisory_unlock($1)`, key)
 }
