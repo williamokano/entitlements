@@ -8,10 +8,13 @@ migrations/
   <module>/NNN_description.sql
 ```
 
-Each module owns its own Postgres schema (e.g. `tenant`, `billing`). The
-`platform` schema holds shared infrastructure tables (outbox,
-processed_events, audit_log, idempotency_keys). Migration `000` creates the
-schemas.
+Each module owns its own Postgres schema (e.g. `tenant`, `billing`; the
+authentication/authorization modules use `authn`/`authz` because
+`AUTHORIZATION` is a reserved SQL word). The `platform` schema holds shared
+infrastructure tables (outbox, processed_events, audit_log,
+idempotency_keys). The first platform migration creates all schemas, and the
+platform module always migrates first; each module's migrations are versioned
+independently (goose table `goose_<module>_version`).
 
 Conventions:
 - Sequential zero-padded prefixes per module (`001_`, `002_`, …).

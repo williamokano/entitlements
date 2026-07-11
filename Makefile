@@ -4,6 +4,7 @@
 
 GO             ?= go
 GOLANGCI_LINT  ?= golangci-lint
+SQLC           ?= $(shell command -v sqlc 2>/dev/null || echo $(shell $(GO) env GOPATH)/bin/sqlc)
 BIN_DIR        ?= bin
 APP            ?= api
 
@@ -49,16 +50,17 @@ lint: ## Run golangci-lint (falls back to go vet if not installed)
 	fi
 
 .PHONY: generate
-generate: ## Generate sqlc code (wired in T-003)
-	@echo "sqlc code generation is wired in T-003; nothing to generate yet."
+generate: ## Generate sqlc code
+	$(SQLC) generate
 
 .PHONY: migrate-up
-migrate-up: ## Apply database migrations (wired in T-003)
-	@echo "migrations are wired in T-003 (goose runner). DATABASE_URL=$(DATABASE_URL)"
+migrate-up: ## Apply all pending migrations for every module
+	DATABASE_URL=$(DATABASE_URL) $(GO) run ./cmd/migrate up
 
 .PHONY: migrate-down
-migrate-down: ## Roll back the last migration (wired in T-003)
-	@echo "migrations are wired in T-003 (goose runner). DATABASE_URL=$(DATABASE_URL)"
+migrate-down: ## Roll back the last migration of one module (MODULE=<name>)
+	@test -n "$(MODULE)" || (echo "usage: make migrate-down MODULE=<module>"; exit 1)
+	DATABASE_URL=$(DATABASE_URL) $(GO) run ./cmd/migrate down $(MODULE)
 
 .PHONY: clean
 clean: ## Remove build artifacts
