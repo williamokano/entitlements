@@ -1,7 +1,8 @@
-// Package httpx contains the shared HTTP server, middleware chain, and
-// RFC 7807 problem+json error mapping used by every module's driving adapter.
+// Package httpx contains the shared HTTP server, middleware chain, router
+// composition helper, and RFC 7807 problem+json error mapping used by every
+// module's driving adapter.
 //
-// The server, middleware (request-id, recovery, logging, auth, tenant,
-// idempotency), and error mapper are implemented across T-004, T-007, and
-// T-008. This package holds no business logic.
+// It holds no business logic. Modules build a Router, mount their handlers,
+// and return errors from the apperr taxonomy; httpx maps those to problem+json
+// responses and attaches a request ID, structured logging, and panic recovery.
 package httpx
