@@ -64,7 +64,11 @@ func testApp(t *testing.T) *application {
 	t.Helper()
 	pool := testkit.Postgres(t)
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	return buildApplication(config.Config{Environment: config.EnvDevelopment}, pool, logger)
+	a, err := buildApplication(config.Config{Environment: config.EnvDevelopment}, pool, logger)
+	if err != nil {
+		t.Fatalf("buildApplication: %v", err)
+	}
+	return a
 }
 
 func TestCompositionRootBootsAndServesHealthz(t *testing.T) {

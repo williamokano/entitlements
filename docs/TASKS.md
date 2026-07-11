@@ -218,7 +218,7 @@ graph TD
 - `TestMustTenantFailsWithoutTenant` — returns/panics with a typed error, never a zero tenant ID.
 - `TestWithSystemContextBypassesTenantGuard` — and is rejected on normal request paths (guard against leaks).
 
-### T-012 · Authentication: users, password factor, JWT + refresh rotation · **L**
+### T-012 · Authentication: users, password factor, JWT + refresh rotation · **L** · ✅ DONE (PR #13)
 **Depends on**: T-009. **Spec**: PLAN.md §2.
 **Deliverables**: global `User` (id, email unique, status) with credentials as **factors** (`password` first; table shaped for `totp`/`webauthn`); argon2id hashing; register + login use cases; JWT access (short TTL, `kid` header) + opaque refresh tokens (hashed at rest) with rotation and family-reuse detection (reuse → revoke family); logout; REST under `/api/v1/auth`; publishes `UserRegistered`, `LoginSucceeded/Failed`; rate-limit hook interface (in-memory default).
 **Acceptance criteria**: passwords never stored or logged in clear; refresh rotation invalidates the old token; reuse of a rotated token kills the whole family; JWTs verify offline with the published key.
