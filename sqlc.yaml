@@ -1,0 +1,14 @@
+# sqlc configuration. Each module adds its own entry pointing at its
+# migrations (schema) and queries directory; generated code lands in the
+# module's adapters/postgres/sqlcgen package. sqlc understands goose
+# migration files and ignores the Down sections.
+version: "2"
+sql:
+  - engine: "postgresql"
+    schema: "migrations/platform"
+    queries: "internal/platform/postgres/queries"
+    gen:
+      go:
+        package: "sqlcgen"
+        out: "internal/platform/postgres/sqlcgen"
+        sql_package: "pgx/v5"
