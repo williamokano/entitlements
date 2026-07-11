@@ -37,6 +37,11 @@ type Config struct {
 	HTTPPort    string      `env:"PORT" envDefault:"8080"`
 	DatabaseURL string      `env:"DATABASE_URL" envDefault:"postgres://entitlements:entitlements@localhost:5432/entitlements?sslmode=disable"`
 	LogLevel    string      `env:"LOG_LEVEL" envDefault:"info"`
+
+	// Observability. OTLPEndpoint is the OTLP/HTTP collector URL; when empty,
+	// tracing/metrics are created but not exported (no-op).
+	ServiceName  string `env:"OTEL_SERVICE_NAME" envDefault:"entitlements"`
+	OTLPEndpoint string `env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
 }
 
 // IsProduction reports whether the configuration targets production.

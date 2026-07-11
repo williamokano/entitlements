@@ -153,8 +153,8 @@ graph TD
 - integration: `TestLockReleasedAfterCrashAllowsNextRun` — advisory lock released on connection drop; job runs again.
 - unit: `TestRegisterRejectsDuplicateJobNames`.
 
-### T-007 · `platform/audit` + observability baseline · **M**
-**Depends on**: T-003, T-004.
+### T-007 · `platform/audit` + observability baseline · **M** · ✅ DONE (PR #8)
+**Depends on**: T-003, T-004. Also adds `internal/platform/observability` and minimal `authctx` tenant-context helpers (T-011 extends authctx).
 **Deliverables**: `audit.Writer.Record(ctx, Entry{Actor, TenantID, Action, Resource, Before, After, Reason})` persisting to `platform.audit_log` (append-only) within the ambient tx; slog JSON handler with request/tenant/trace IDs auto-attached from context; OpenTelemetry Tracer/Meter wiring (no-op exporters by default, OTLP via config); HTTP middleware creating a span per request.
 **Acceptance criteria**: audit entries commit/roll back with the business tx; every request produces one structured log line and one span carrying the request ID.
 **Expected tests**:
