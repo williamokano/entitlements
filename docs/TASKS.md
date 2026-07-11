@@ -206,7 +206,7 @@ graph TD
 - integration: `TestSettingsJSONBRoundTrip` — arbitrary nested settings survive write/read.
 - integration (HTTP): `TestTenantCRUDEndpoints` — 201 create, 200 get/update, 409 dup slug, 404 missing, suspend/delete paths.
 
-### T-011 · Tenant resolution middleware + `platform/authctx` · **S**
+### T-011 · Tenant resolution middleware + `platform/authctx` · **S** · ✅ DONE (PR #12)
 **Depends on**: T-010.
 **Deliverables**: `authctx` carrying `Principal` and `TenantID`; middleware resolving tenant from (in order) JWT claim → `X-Tenant-ID` header → subdomain, validating via `ports.TenantReader` (must be `active`); `authctx.MustTenant(ctx)` guard used by all tenant-scoped repos; explicit `WithSystemContext` escape hatch.
 **Acceptance criteria**: precedence order is exactly claim > header > subdomain; non-active tenants are rejected; tenant-scoped repositories hard-fail without a tenant in context.

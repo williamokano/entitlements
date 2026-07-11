@@ -60,16 +60,24 @@ func buildApplication(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger
 	// The set of business modules. New modules are added here. Each SaaS
 	// registers its tenant provisioning hooks (seed roles, create a trial
 	// subscription, …) alongside the default logging hook.
+	tenantMod := tenant.New(deps, tenant.WithProvisioningHooks(tenant.NewLoggingHook(logger)))
 	modules := []app.Module{
-		tenant.New(deps, tenant.WithProvisioningHooks(tenant.NewLoggingHook(logger))),
+		tenantMod,
 		example.New(deps),
 	}
+
+	// Resolve the tenant before idempotency (so keys are scoped per tenant) and
+	// before module handlers. Health probes and the tenant-admin API are exempt:
+	// creating or managing a tenant does not happen within a tenant.
+	resolveTenant := tenant.ResolveMiddleware(tenantMod.Port(),
+		tenant.WithExempt("/healthz", "/readyz", "/api/v1/tenants"))
 
 	mws := []httpx.Middleware{
 		httpx.RequestID(ids),
 		observability.TracingMiddleware(otel.GetTracerProvider()),
 		httpx.Recovery(logger),
 		httpx.Logging(logger),
+		resolveTenant,
 		httpx.Idempotency(pool, clk, idempotencyTTL),
 	}
 	router := httpx.NewRouter(mws...)
