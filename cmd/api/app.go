@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel"
 
 	"github.com/williamokano/entitlements/internal/app"
+	"github.com/williamokano/entitlements/internal/modules/authentication"
 	"github.com/williamokano/entitlements/internal/modules/example"
 	"github.com/williamokano/entitlements/internal/modules/tenant"
 	"github.com/williamokano/entitlements/internal/platform/audit"
@@ -39,7 +40,7 @@ type application struct {
 // buildApplication constructs platform dependencies, wires every module, and
 // assembles the HTTP handler and background workers. It is separate from run so
 // tests can drive the wired handler without binding a socket.
-func buildApplication(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) *application {
+func buildApplication(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*application, error) {
 	clk := clock.System
 	ids := id.UUIDv7{}
 	bus := events.NewBus()
@@ -61,16 +62,22 @@ func buildApplication(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger
 	// registers its tenant provisioning hooks (seed roles, create a trial
 	// subscription, …) alongside the default logging hook.
 	tenantMod := tenant.New(deps, tenant.WithProvisioningHooks(tenant.NewLoggingHook(logger)))
+	authMod, err := authentication.New(deps)
+	if err != nil {
+		return nil, fmt.Errorf("build authentication module: %w", err)
+	}
 	modules := []app.Module{
 		tenantMod,
+		authMod,
 		example.New(deps),
 	}
 
 	// Resolve the tenant before idempotency (so keys are scoped per tenant) and
-	// before module handlers. Health probes and the tenant-admin API are exempt:
-	// creating or managing a tenant does not happen within a tenant.
+	// before module handlers. Health probes, the tenant-admin API, and the
+	// authentication API are exempt: managing a tenant or authenticating a global
+	// user does not happen within a tenant.
 	resolveTenant := tenant.ResolveMiddleware(tenantMod.Port(),
-		tenant.WithExempt("/healthz", "/readyz", "/api/v1/tenants"))
+		tenant.WithExempt("/healthz", "/readyz", "/api/v1/tenants", "/api/v1/auth"))
 
 	mws := []httpx.Middleware{
 		httpx.RequestID(ids),
@@ -96,7 +103,7 @@ func buildApplication(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger
 		relay:   events.NewRelay(pool, bus, clk, logger, events.RelayConfig{}),
 		jobs:    deps.Jobs,
 		pool:    pool,
-	}
+	}, nil
 }
 
 // run is the full boot sequence: config → observability → Postgres → migrations
@@ -121,7 +128,10 @@ func run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		return fmt.Errorf("run migrations: %w", err)
 	}
 
-	a := buildApplication(cfg, pool, logger)
+	a, err := buildApplication(cfg, pool, logger)
+	if err != nil {
+		return fmt.Errorf("build application: %w", err)
+	}
 
 	// Background workers: the outbox relay and the scheduled-job runner.
 	go func() {
