@@ -3,3 +3,27 @@
 //   sqlc v1.28.0
 
 package sqlcgen
+
+import (
+	"github.com/jackc/pgx/v5/pgtype"
+)
+
+type PlatformOutbox struct {
+	ID            pgtype.UUID
+	OccurredAt    pgtype.Timestamptz
+	TenantID      pgtype.UUID
+	Module        string
+	EventType     string
+	Payload       []byte
+	Attempts      int32
+	NextAttemptAt pgtype.Timestamptz
+	PublishedAt   pgtype.Timestamptz
+	LastError     pgtype.Text
+	CreatedAt     pgtype.Timestamptz
+}
+
+type PlatformProcessedEvent struct {
+	Consumer    string
+	EventID     pgtype.UUID
+	ProcessedAt pgtype.Timestamptz
+}
