@@ -192,8 +192,8 @@ graph TD
 
 ## Milestone 2 — Identity core
 
-### T-010 · Tenant module core · **M**
-**Depends on**: T-009. **Spec**: PLAN.md §1.
+### T-010 · Tenant module core · **M** · ✅ DONE (PR #11)
+**Depends on**: T-009. **Spec**: PLAN.md §1. First real business module — the template for the rest (built alongside the `example` reference).
 **Deliverables**: `Tenant` aggregate (uuid, slug, name, status `active|suspended|deleted`, `settings JSONB`); create/update/suspend/soft-delete use cases; slug uniqueness + normalization; provisioning pipeline (ordered hook registry on `TenantCreated`; ship a logging no-op hook); publishes `TenantCreated/Suspended/Deleted`; REST CRUD under `/api/v1/tenants`; `ports.TenantReader` (GetByID/GetBySlug, status).
 **Acceptance criteria**: lifecycle transitions guarded; soft-deleted tenants invisible to normal reads; provisioning hooks run in registration order after commit; every state change emits its event via the outbox.
 **Expected tests**:

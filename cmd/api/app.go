@@ -12,6 +12,7 @@ import (
 
 	"github.com/williamokano/entitlements/internal/app"
 	"github.com/williamokano/entitlements/internal/modules/example"
+	"github.com/williamokano/entitlements/internal/modules/tenant"
 	"github.com/williamokano/entitlements/internal/platform/audit"
 	"github.com/williamokano/entitlements/internal/platform/clock"
 	"github.com/williamokano/entitlements/internal/platform/config"
@@ -56,8 +57,11 @@ func buildApplication(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger
 		IDs:        ids,
 	}
 
-	// The set of business modules. New modules are added here.
+	// The set of business modules. New modules are added here. Each SaaS
+	// registers its tenant provisioning hooks (seed roles, create a trial
+	// subscription, …) alongside the default logging hook.
 	modules := []app.Module{
+		tenant.New(deps, tenant.WithProvisioningHooks(tenant.NewLoggingHook(logger))),
 		example.New(deps),
 	}
 
