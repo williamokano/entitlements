@@ -61,6 +61,39 @@ func TestValidateRejectsProductionWithDefaultDSN(t *testing.T) {
 	}
 }
 
+func TestParseLoadsDotEnvFile(t *testing.T) {
+	type dotenvConfig struct {
+		FromFile string `env:"CONFIG_TEST_DOTENV"`
+		Both     string `env:"CONFIG_TEST_BOTH"`
+	}
+
+	dir := t.TempDir()
+	dotenv := []byte("CONFIG_TEST_DOTENV=from-dotenv\nCONFIG_TEST_BOTH=from-dotenv\n")
+	if err := os.WriteFile(dir+"/.env", dotenv, 0o600); err != nil {
+		t.Fatalf("write .env: %v", err)
+	}
+	t.Chdir(dir)
+
+	// Ensure FromFile is genuinely absent from the process env, and Both is
+	// set so we can assert the real environment wins over .env.
+	if orig, ok := os.LookupEnv("CONFIG_TEST_DOTENV"); ok {
+		t.Cleanup(func() { _ = os.Setenv("CONFIG_TEST_DOTENV", orig) })
+	}
+	_ = os.Unsetenv("CONFIG_TEST_DOTENV")
+	t.Setenv("CONFIG_TEST_BOTH", "from-env")
+
+	got, err := Parse[dotenvConfig]()
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if got.FromFile != "from-dotenv" {
+		t.Errorf("FromFile = %q, want from-dotenv (loaded from .env)", got.FromFile)
+	}
+	if got.Both != "from-env" {
+		t.Errorf("Both = %q, want from-env (real env must win over .env)", got.Both)
+	}
+}
+
 func TestParseRequiredFieldFailsFast(t *testing.T) {
 	type requiredConfig struct {
 		Secret string `env:"CONFIG_TEST_REQUIRED,required"`

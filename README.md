@@ -51,7 +51,8 @@ environment variable.
 | -------------- | ---------------------------------------------------- |
 | `make build`   | Compile all packages and the `api` binary            |
 | `make run`     | Run the API server                                   |
-| `make test`    | Run all tests with the race detector                 |
+| `make test`    | Run unit tests with the race detector                |
+| `make test-integration` | Run unit + integration tests (testcontainers; requires Docker) |
 | `make lint`    | Run golangci-lint (falls back to `go vet`)           |
 | `make tidy`    | Tidy and verify `go.mod` / `go.sum`                  |
 | `make generate`| Generate sqlc code (wired in T-003)                  |
@@ -62,3 +63,10 @@ environment variable.
 Work is tracked as tasks (`T-XXX`) in [`docs/TASKS.md`](docs/TASKS.md). Each
 task lands via its own pull request: branch `feat/T-XXX-short-name` cut from
 `main`, then open a PR into `main`. Direct pushes to `main` are not used.
+
+**Tests are the contract**: every task card in `docs/TASKS.md` lists the
+expected tests that prove the task is done. A task is only complete when that
+suite exists and passes (`make test` for unit, `make test-integration` for
+testcontainers-backed integration tests — both run in CI). This keeps the
+skeleton rewrite-safe: reimplement any package and the suite tells you whether
+behavior survived.
