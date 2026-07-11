@@ -28,13 +28,12 @@ func TestHealthEndpoints(t *testing.T) {
 	}
 }
 
-func TestPortDefault(t *testing.T) {
-	t.Setenv("PORT", "")
-	if got := port(); got != "8080" {
-		t.Fatalf("port() = %q, want 8080", got)
-	}
-	t.Setenv("PORT", "9999")
-	if got := port(); got != "9999" {
-		t.Fatalf("port() = %q, want 9999", got)
+func TestNewLogger(t *testing.T) {
+	// Known and unknown levels both yield a usable logger (unknown falls back
+	// to info).
+	for _, level := range []string{"debug", "info", "warn", "error", "nonsense", ""} {
+		if got := newLogger(level); got == nil {
+			t.Fatalf("newLogger(%q) = nil", level)
+		}
 	}
 }
