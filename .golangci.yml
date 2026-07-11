@@ -1,0 +1,33 @@
+# golangci-lint configuration (v2 schema).
+#
+# T-001 enables a standard, broadly-agreed set of linters. The default v2 set
+# already includes errcheck, govet, ineffassign, staticcheck, and unused; we
+# add revive and depguard on top.
+#
+# The architectural import rules (domain imports nothing; modules reach other
+# modules only via their ports package) are enforced by depguard and are
+# filled in by T-009 — the depguard block below is intentionally permissive
+# for now.
+
+version: "2"
+
+linters:
+  enable:
+    - revive
+    - depguard
+  settings:
+    depguard:
+      rules:
+        # Placeholder rule set. T-009 replaces this with the real architecture
+        # boundaries (per docs/PLAN.md "Enforced rules").
+        main:
+          list-mode: lax
+          allow:
+            - $gostd
+            - github.com/williamokano/entitlements
+  exclusions:
+    rules:
+      # doc.go stubs carry package documentation only.
+      - path: doc\.go
+        linters:
+          - revive

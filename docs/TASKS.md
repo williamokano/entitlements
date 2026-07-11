@@ -5,7 +5,7 @@ Companion to [`docs/PLAN.md`](./PLAN.md). Each task is sized to be implementable
 ## Conventions (apply to every task)
 
 - **Read first**: `docs/PLAN.md` — especially "Key Decisions", "Repository Layout", and the module spec for the task at hand.
-- **Branching**: one branch per task, named `feat/T-XXX-short-name`, merged to `main` when done (direct merge, no PR required).
+- **Branching & PRs**: one branch per task, named `feat/T-XXX-short-name`, cut from the latest `main`. Every task lands via a **pull request into `main`** — no direct merges to `main`. `main` stays green (CI must pass before merge).
 - **Definition of done** (in addition to the task's acceptance criteria):
   - `make lint test build` passes.
   - New code follows the hexagonal layout (`domain` / `app` / `ports` / `adapters`) and the import rules: `domain` imports nothing from other layers/modules; modules import other modules only via their `ports` package.
