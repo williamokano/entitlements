@@ -14,6 +14,7 @@ import (
 	"github.com/williamokano/entitlements/internal/modules/authentication/internal/security"
 	"github.com/williamokano/entitlements/internal/modules/authentication/ports"
 	"github.com/williamokano/entitlements/internal/platform/apperr"
+	"github.com/williamokano/entitlements/internal/platform/audit"
 	"github.com/williamokano/entitlements/internal/platform/clock"
 	"github.com/williamokano/entitlements/internal/platform/events"
 	"github.com/williamokano/entitlements/internal/platform/id"
@@ -41,16 +42,34 @@ type UserView struct {
 
 // Service implements the authentication use cases.
 type Service struct {
-	uow        *postgres.UnitOfWork
-	outbox     *events.Outbox
-	users      domain.UserRepository
-	refresh    *domain.RefreshService
-	refreshRaw domain.RefreshRepository
-	signer     *security.Signer
-	ids        id.Generator
-	clk        clock.Clock
-	refreshTTL time.Duration
-	limiter    ports.RateLimiter
+	uow             *postgres.UnitOfWork
+	outbox          *events.Outbox
+	users           domain.UserRepository
+	refresh         *domain.RefreshService
+	refreshRaw      domain.RefreshRepository
+	authTokens      domain.AuthTokenRepository
+	signer          *security.Signer
+	ids             id.Generator
+	clk             clock.Clock
+	refreshTTL      time.Duration
+	limiter         ports.RateLimiter
+	sender          ports.EmailSender
+	audit           *audit.Writer
+	baseURL         string
+	verificationTTL time.Duration
+	resetTTL        time.Duration
+}
+
+// Config carries the tunables and collaborators the recovery/session use cases
+// need beyond the core login dependencies.
+type Config struct {
+	Sender          ports.EmailSender
+	Audit           *audit.Writer
+	BaseURL         string
+	RefreshTTL      time.Duration
+	VerificationTTL time.Duration
+	ResetTTL        time.Duration
+	Limiter         ports.RateLimiter
 }
 
 // New builds a Service.
@@ -59,23 +78,29 @@ func New(
 	outbox *events.Outbox,
 	users domain.UserRepository,
 	refreshRepo domain.RefreshRepository,
+	authTokens domain.AuthTokenRepository,
 	signer *security.Signer,
 	ids id.Generator,
 	clk clock.Clock,
-	refreshTTL time.Duration,
-	limiter ports.RateLimiter,
+	cfg Config,
 ) *Service {
 	return &Service{
-		uow:        uow,
-		outbox:     outbox,
-		users:      users,
-		refresh:    domain.NewRefreshService(refreshRepo),
-		refreshRaw: refreshRepo,
-		signer:     signer,
-		ids:        ids,
-		clk:        clk,
-		refreshTTL: refreshTTL,
-		limiter:    limiter,
+		uow:             uow,
+		outbox:          outbox,
+		users:           users,
+		refresh:         domain.NewRefreshService(refreshRepo),
+		refreshRaw:      refreshRepo,
+		authTokens:      authTokens,
+		signer:          signer,
+		ids:             ids,
+		clk:             clk,
+		refreshTTL:      cfg.RefreshTTL,
+		limiter:         cfg.Limiter,
+		sender:          cfg.Sender,
+		audit:           cfg.Audit,
+		baseURL:         cfg.BaseURL,
+		verificationTTL: cfg.VerificationTTL,
+		resetTTL:        cfg.ResetTTL,
 	}
 }
 
@@ -207,7 +232,9 @@ func (s *Service) Refresh(ctx context.Context, rawRefresh string) (TokenPair, er
 		if err != nil {
 			return err
 		}
-		access, err := s.signer.Sign(user.ID, user.Email, now)
+		// The successor stays in the same family, so the session id is stable
+		// across refreshes.
+		access, err := s.signer.Sign(user.ID, result.Successor.FamilyID, user.Email, now)
 		if err != nil {
 			return err
 		}
@@ -231,20 +258,22 @@ func (s *Service) Logout(ctx context.Context, rawRefresh string) error {
 }
 
 // issueTokens mints an access token and persists a new refresh-token family,
-// running extra (e.g. event) side effects in the same transaction.
+// running extra (e.g. event) side effects in the same transaction. The access
+// token carries the new family's id as its session id (sid).
 func (s *Service) issueTokens(ctx context.Context, user *domain.User, extra func(context.Context) error) (TokenPair, error) {
 	var pair TokenPair
 	err := s.uow.Do(ctx, func(ctx context.Context) error {
 		now := s.clk.Now().UTC()
-		access, err := s.signer.Sign(user.ID, user.Email, now)
-		if err != nil {
-			return err
-		}
 		rawRefresh, err := security.GenerateOpaqueToken()
 		if err != nil {
 			return err
 		}
-		if _, err := s.refresh.Issue(ctx, s.ids.New(), user.ID, rawRefresh, now, now.Add(s.refreshTTL)); err != nil {
+		token, err := s.refresh.Issue(ctx, s.ids.New(), user.ID, rawRefresh, now, now.Add(s.refreshTTL))
+		if err != nil {
+			return err
+		}
+		access, err := s.signer.Sign(user.ID, token.FamilyID, user.Email, now)
+		if err != nil {
 			return err
 		}
 		if extra != nil {

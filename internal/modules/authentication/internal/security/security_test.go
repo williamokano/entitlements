@@ -61,8 +61,9 @@ func TestJWTSignedWithKidAndVerifies(t *testing.T) {
 	verifier := security.NewVerifier(map[string]ed25519.PublicKey{kid: pub}, issuer)
 
 	sub := uuid.New()
+	sid := uuid.New()
 	issuedAt := time.Now()
-	raw, err := signer.Sign(sub, "alice@example.com", issuedAt)
+	raw, err := signer.Sign(sub, sid, "alice@example.com", issuedAt)
 	if err != nil {
 		t.Fatalf("Sign: %v", err)
 	}
@@ -74,6 +75,9 @@ func TestJWTSignedWithKidAndVerifies(t *testing.T) {
 	if claims.Subject != sub.String() {
 		t.Fatalf("sub = %q, want %q", claims.Subject, sub)
 	}
+	if claims.SessionID != sid.String() {
+		t.Fatalf("sid = %q, want %q", claims.SessionID, sid)
+	}
 	if claims.Email != "alice@example.com" {
 		t.Fatalf("email = %q, want alice@example.com", claims.Email)
 	}
@@ -83,14 +87,14 @@ func TestJWTSignedWithKidAndVerifies(t *testing.T) {
 
 	// An expired token is rejected.
 	expiredSigner := security.NewSigner(kid, priv, issuer, -time.Minute)
-	expired, _ := expiredSigner.Sign(sub, "", issuedAt.Add(-time.Hour))
+	expired, _ := expiredSigner.Sign(sub, sid, "", issuedAt.Add(-time.Hour))
 	if _, err := verifier.Verify(expired); err == nil {
 		t.Fatal("expired token verified, want rejection")
 	}
 
 	// A token signed with a different key is rejected (wrong key).
 	_, otherPriv, _ := ed25519.GenerateKey(nil)
-	forged, _ := security.NewSigner(kid, otherPriv, issuer, time.Minute).Sign(sub, "", issuedAt)
+	forged, _ := security.NewSigner(kid, otherPriv, issuer, time.Minute).Sign(sub, sid, "", issuedAt)
 	if _, err := verifier.Verify(forged); err == nil {
 		t.Fatal("token signed with wrong key verified, want rejection")
 	}

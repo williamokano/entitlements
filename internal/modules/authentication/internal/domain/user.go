@@ -39,11 +39,12 @@ const (
 // User is a global identity. Membership in tenants lives in the tenant module;
 // permissions live in authorization. A user carries no tenant scope.
 type User struct {
-	ID        uuid.UUID
-	Email     string
-	Status    Status
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID              uuid.UUID
+	Email           string
+	Status          Status
+	EmailVerifiedAt *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 // NewUser builds an active user with a normalized email.
@@ -63,6 +64,19 @@ func NewUser(id uuid.UUID, email string, now time.Time) (*User, error) {
 
 // Active reports whether the user may authenticate.
 func (u *User) Active() bool { return u.Status == StatusActive }
+
+// EmailVerified reports whether the user's email has been verified.
+func (u *User) EmailVerified() bool { return u.EmailVerifiedAt != nil }
+
+// MarkEmailVerified records the email as verified at now (idempotent: an
+// already-verified email keeps its original timestamp).
+func (u *User) MarkEmailVerified(now time.Time) {
+	if u.EmailVerifiedAt == nil {
+		t := now
+		u.EmailVerifiedAt = &t
+	}
+	u.UpdatedAt = now
+}
 
 // Credential is a stored authentication factor. Secret is the factor's verifier
 // (an argon2id hash for password) — never a plaintext secret.
@@ -99,6 +113,8 @@ type UserRepository interface {
 	CreateUser(ctx context.Context, u *User) error
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (*User, error)
+	MarkEmailVerified(ctx context.Context, userID uuid.UUID, verifiedAt time.Time) error
 	CreateCredential(ctx context.Context, c *Credential) error
 	GetCredential(ctx context.Context, userID uuid.UUID, typ FactorType) (*Credential, error)
+	UpdateCredentialSecret(ctx context.Context, userID uuid.UUID, typ FactorType, secret string, updatedAt time.Time) error
 }

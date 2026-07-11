@@ -233,7 +233,7 @@ graph TD
 - integration: `TestRefreshTokensHashedAtRest` — raw token value absent from DB.
 - integration: `TestRateLimitHookInvokedOnLogin` — recording hook sees attempts.
 
-### T-013 · Authentication: email verification, recovery, session management · **M**
+### T-013 · Authentication: email verification, recovery, session management · **M** · ✅ DONE (PR #14)
 **Depends on**: T-012.
 **Deliverables**: `EmailSender` port + dev adapter (logs the link); email verification (single-use expiring token); password recovery (request → token → reset, invalidates all sessions); password change (re-auth required); session listing + revoke-others; publishes `PasswordChanged/Recovered`; audit entries via `platform/audit`.
 **Acceptance criteria**: all tokens single-use and expiring; recovery/reset revokes every live session; flows never reveal whether an email exists.

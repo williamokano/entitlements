@@ -64,6 +64,25 @@ func (m *memRefreshRepo) RevokeUser(_ context.Context, userID uuid.UUID) error {
 	return nil
 }
 
+func (m *memRefreshRepo) RevokeFamiliesExcept(_ context.Context, userID, keep uuid.UUID) error {
+	for _, t := range m.byID {
+		if t.UserID == userID && t.FamilyID != keep {
+			t.Status = RefreshRevoked
+		}
+	}
+	return nil
+}
+
+func (m *memRefreshRepo) ListSessions(_ context.Context, userID uuid.UUID) ([]Session, error) {
+	var out []Session
+	for _, t := range m.byID {
+		if t.UserID == userID && t.Status == RefreshActive {
+			out = append(out, Session{ID: t.FamilyID, IssuedAt: t.IssuedAt, ExpiresAt: t.ExpiresAt})
+		}
+	}
+	return out, nil
+}
+
 func mustIssue(t *testing.T, svc *RefreshService, userID uuid.UUID, raw string) *RefreshToken {
 	t.Helper()
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
