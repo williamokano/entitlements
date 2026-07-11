@@ -8,6 +8,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type PlatformAuditLog struct {
+	ID        pgtype.UUID
+	Actor     string
+	TenantID  pgtype.UUID
+	Action    string
+	Resource  string
+	Before    []byte
+	After     []byte
+	Reason    string
+	CreatedAt pgtype.Timestamptz
+}
+
 type PlatformJobRun struct {
 	ID         pgtype.UUID
 	JobName    string
