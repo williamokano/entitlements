@@ -114,8 +114,8 @@ graph TD
 - `postgres` (integration): `TestMigrateDownReverts` — down migration reverts the last version.
 - CI gate: `make generate` output compiles and `git diff --exit-code` shows no drift.
 
-### T-004 · `platform/httpx` — server, middleware, errors · **M**
-**Depends on**: T-001.
+### T-004 · `platform/httpx` — server, middleware, errors · **M** · ✅ DONE (PR #5)
+**Depends on**: T-001. Also adds `internal/platform/apperr` (error taxonomy, net/http-free so the domain can return typed errors).
 **Deliverables**: `net/http` server with graceful shutdown; middleware: request-ID (accept inbound or generate), panic recovery, request logging; RFC 7807 `problem+json` mapping from typed app errors (`NotFound`, `Conflict`, `Validation`, `Unauthorized`, `Forbidden`); `/healthz` + `/readyz`; router composition helper for mounting module handlers under prefixes.
 **Acceptance criteria**: every response carries a request ID; a panicking handler yields a 500 problem+json (no stack leak) and the server keeps serving; each typed error maps to its status.
 **Expected tests** (all `httptest`, unit):
