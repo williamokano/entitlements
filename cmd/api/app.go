@@ -13,6 +13,7 @@ import (
 	"github.com/williamokano/entitlements/internal/app"
 	"github.com/williamokano/entitlements/internal/modules/authentication"
 	"github.com/williamokano/entitlements/internal/modules/authorization"
+	"github.com/williamokano/entitlements/internal/modules/catalog"
 	"github.com/williamokano/entitlements/internal/modules/example"
 	"github.com/williamokano/entitlements/internal/modules/tenant"
 	"github.com/williamokano/entitlements/internal/platform/audit"
@@ -78,6 +79,7 @@ func buildApplication(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger
 		tenantMod,
 		authMod,
 		authzMod,
+		catalog.New(deps),
 		example.New(deps),
 	}
 
@@ -92,7 +94,7 @@ func buildApplication(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger
 	// user does not happen within a tenant. Resolution runs after authentication
 	// so an API-key call can supply its own tenant.
 	resolveTenant := tenant.ResolveMiddleware(tenantMod.Port(),
-		tenant.WithExempt("/healthz", "/readyz", "/api/v1/tenants", "/api/v1/auth"))
+		tenant.WithExempt("/healthz", "/readyz", "/api/v1/tenants", "/api/v1/auth", "/api/v1/catalog"))
 
 	mws := []httpx.Middleware{
 		httpx.RequestID(ids),

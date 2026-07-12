@@ -292,7 +292,7 @@ must be bootstrapped out of band. Wire owner-on-create (or bridge
 
 ## Milestone 3 — Product core
 
-### T-017 · Catalog: plans, versions, pricing · **L**
+### T-017 · Catalog: plans, versions, pricing · **L** · ✅ DONE (PR #20)
 **Depends on**: T-009. **Spec**: PLAN.md §4.
 **Deliverables**: `Plan` + immutable `PlanVersion` (publish = new version; subscriptions pin versions); lifecycle `draft→active→archived`, public/hidden; per version: prices per billing cycle (`monthly|annual|custom`) in minor units + currency, trial config (enabled, days, card_required), grace days, feature grants (`feature_key → value`, free-form keys); REST admin CRUD + public "list active public plans"; `ports.CatalogReader.GetPlanVersion(id)`; publishes `PlanVersionPublished/PlanArchived`.
 **Acceptance criteria**: a published version can never change; new versions never mutate what existing subscribers pinned; public listing hides drafts/hidden plans; prices only in integer minor units.
