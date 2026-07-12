@@ -43,15 +43,36 @@ func newDeps(t *testing.T) app.Deps {
 	}
 }
 
-// fakeCatalog returns a canned published plan version for any id.
-type fakeCatalog struct{ trialDays int }
+// fakeCatalog returns a canned published plan version for any id. Prices can
+// vary per version id (upgrade/downgrade tests); unlisted ids cost 1000/month.
+type fakeCatalog struct {
+	trialDays int
+	amounts   map[uuid.UUID]int64
+	addons    map[uuid.UUID]catalogports.AddonVersionInfo
+}
 
 func (f fakeCatalog) GetPlanVersion(_ context.Context, id uuid.UUID) (catalogports.PlanVersionInfo, error) {
+	amount := int64(1000)
+	if a, ok := f.amounts[id]; ok {
+		amount = a
+	}
 	return catalogports.PlanVersionInfo{
 		ID: id, PlanID: uuid.New(), PlanKey: "pro", Version: 1, Status: "published",
-		Currency: "USD",
-		Prices:   []catalogports.PriceInfo{{Cycle: "monthly", AmountMinor: 1000}},
+		Currency:     "USD",
+		Prices:       []catalogports.PriceInfo{{Cycle: "monthly", AmountMinor: amount}},
 		TrialEnabled: f.trialDays > 0, TrialDays: f.trialDays,
+	}, nil
+}
+
+// GetAddonVersion returns a pro-compatible quantity-enabled addon unless the id
+// is overridden.
+func (f fakeCatalog) GetAddonVersion(_ context.Context, id uuid.UUID) (catalogports.AddonVersionInfo, error) {
+	if av, ok := f.addons[id]; ok {
+		return av, nil
+	}
+	return catalogports.AddonVersionInfo{
+		ID: id, AddonID: uuid.New(), AddonKey: "extra-seats", Version: 1, Status: "published",
+		Currency: "USD", QuantityAllowed: true, CompatiblePlanKeys: []string{"pro"},
 	}, nil
 }
 
@@ -186,6 +207,165 @@ func TestEveryTransitionRecordsHistoryAndOutboxEventAtomically(t *testing.T) {
 	}
 	if after != before {
 		t.Fatalf("rollback left a transition row: before=%d after=%d", before, after)
+	}
+}
+
+func TestScheduledChangePersistedAndVisibleViaREST(t *testing.T) {
+	deps := newDeps(t)
+	cheaper := uuid.New()
+	mod := subscription.New(deps, fakeCatalog{amounts: map[uuid.UUID]int64{cheaper: 500}})
+	tenantID, userID := uuid.New(), uuid.New()
+	srv := serverFor(mod.Handler(), tenantID, userID)
+	defer srv.Close()
+
+	original := uuid.New()
+	if status, _ := post(t, srv.URL, `{"plan_version_id":"`+original.String()+`","cycle":"monthly"}`); status != http.StatusCreated {
+		t.Fatal("create")
+	}
+
+	// Cheaper plan → downgrade → scheduled, current pin unchanged.
+	status, body := post(t, srv.URL+"/change-plan", `{"plan_version_id":"`+cheaper.String()+`","cycle":"monthly"}`)
+	if status != http.StatusOK {
+		t.Fatalf("change-plan = %d (%s)", status, body)
+	}
+	if !strings.Contains(body, `"plan_version_id":"`+original.String()+`"`) {
+		t.Fatalf("downgrade re-pinned immediately: %s", body)
+	}
+	if !strings.Contains(body, `"scheduled_change"`) || !strings.Contains(body, cheaper.String()) {
+		t.Fatalf("scheduled change not visible: %s", body)
+	}
+
+	// Survives a reload (persisted, not just in the response).
+	if _, gb := get(t, srv.URL); !strings.Contains(gb, `"scheduled_change"`) {
+		t.Fatalf("scheduled change not persisted: %s", gb)
+	}
+
+	// Cancelable.
+	if status, cb := post(t, srv.URL+"/scheduled-change/cancel", ``); status != http.StatusOK || strings.Contains(cb, `"scheduled_change"`) {
+		t.Fatalf("cancel scheduled change = %d %s", status, cb)
+	}
+	if _, gb := get(t, srv.URL); strings.Contains(gb, `"scheduled_change"`) {
+		t.Fatalf("scheduled change survived cancel: %s", gb)
+	}
+	// Canceling again conflicts.
+	if status, _ := post(t, srv.URL+"/scheduled-change/cancel", ``); status != http.StatusConflict {
+		t.Fatal("second cancel, want 409")
+	}
+}
+
+func TestApplyScheduledChangeAtBoundaryRepinsAndEmits(t *testing.T) {
+	deps := newDeps(t)
+	cheaper := uuid.New()
+	mod := subscription.New(deps, fakeCatalog{amounts: map[uuid.UUID]int64{cheaper: 500}})
+	tenantID, userID := uuid.New(), uuid.New()
+	srv := serverFor(mod.Handler(), tenantID, userID)
+	defer srv.Close()
+	ctx := context.Background()
+
+	if status, _ := post(t, srv.URL, `{"plan_version_id":"`+uuid.NewString()+`","cycle":"monthly"}`); status != http.StatusCreated {
+		t.Fatal("create")
+	}
+	if status, _ := post(t, srv.URL+"/change-plan", `{"plan_version_id":"`+cheaper.String()+`","cycle":"monthly"}`); status != http.StatusOK {
+		t.Fatal("schedule downgrade")
+	}
+
+	var subID uuid.UUID
+	if err := deps.Pool.QueryRow(ctx, `SELECT id FROM subscription.subscriptions WHERE tenant_id = $1`, tenantID).Scan(&subID); err != nil {
+		t.Fatalf("find subscription: %v", err)
+	}
+
+	// The hook T-021 will call at rollover.
+	if err := mod.ApplyScheduledChange(ctx, subID); err != nil {
+		t.Fatalf("ApplyScheduledChange: %v", err)
+	}
+
+	if _, gb := get(t, srv.URL); !strings.Contains(gb, `"plan_version_id":"`+cheaper.String()+`"`) || strings.Contains(gb, `"scheduled_change"`) {
+		t.Fatalf("not re-pinned/cleared after apply: %s", gb)
+	}
+	var payload string
+	if err := deps.Pool.QueryRow(ctx,
+		`SELECT payload::text FROM platform.outbox WHERE tenant_id = $1 AND event_type = 'subscription.plan_changed'`, tenantID).Scan(&payload); err != nil {
+		t.Fatalf("plan_changed event: %v", err)
+	}
+	if !strings.Contains(payload, `"timing": "period_end"`) || !strings.Contains(payload, cheaper.String()) {
+		t.Fatalf("payload = %s", payload)
+	}
+
+	// Idempotent: applying again with nothing scheduled is a no-op.
+	if err := mod.ApplyScheduledChange(ctx, subID); err != nil {
+		t.Fatalf("second apply: %v", err)
+	}
+	var count int
+	if err := deps.Pool.QueryRow(ctx,
+		`SELECT count(*) FROM platform.outbox WHERE tenant_id = $1 AND event_type = 'subscription.plan_changed'`, tenantID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("plan_changed events = %d, want 1", count)
+	}
+}
+
+func TestAddonAttachDetachEmitsSubscriptionAddonChanged(t *testing.T) {
+	deps := newDeps(t)
+	incompatible := uuid.New()
+	mod := subscription.New(deps, fakeCatalog{addons: map[uuid.UUID]catalogports.AddonVersionInfo{
+		incompatible: {ID: incompatible, Status: "published", QuantityAllowed: true, CompatiblePlanKeys: []string{"enterprise"}},
+	}})
+	tenantID, userID := uuid.New(), uuid.New()
+	srv := serverFor(mod.Handler(), tenantID, userID)
+	defer srv.Close()
+	ctx := context.Background()
+
+	if status, _ := post(t, srv.URL, `{"plan_version_id":"`+uuid.NewString()+`","cycle":"monthly"}`); status != http.StatusCreated {
+		t.Fatal("create")
+	}
+
+	// Incompatible addon rejected end-to-end.
+	if status, _ := post(t, srv.URL+"/addons", `{"addon_version_id":"`+incompatible.String()+`","quantity":1}`); status != http.StatusBadRequest {
+		t.Fatal("incompatible attach, want 400")
+	}
+
+	av := uuid.New()
+	status, body := post(t, srv.URL+"/addons", `{"addon_version_id":"`+av.String()+`","quantity":3}`)
+	if status != http.StatusOK || !strings.Contains(body, `"quantity":3`) {
+		t.Fatalf("attach = %d %s", status, body)
+	}
+
+	// Quantity change on re-attach.
+	if status, _ := post(t, srv.URL+"/addons", `{"addon_version_id":"`+av.String()+`","quantity":5}`); status != http.StatusOK {
+		t.Fatal("quantity change")
+	}
+
+	// Detach.
+	if status, db := do(t, http.MethodDelete, srv.URL+"/addons/"+av.String(), ""); status != http.StatusOK || strings.Contains(db, av.String()) {
+		t.Fatalf("detach = %d %s", status, db)
+	}
+	// Detaching again is a 404.
+	if status, _ := do(t, http.MethodDelete, srv.URL+"/addons/"+av.String(), ""); status != http.StatusNotFound {
+		t.Fatal("second detach, want 404")
+	}
+
+	rows, err := deps.Pool.Query(ctx,
+		`SELECT payload::text FROM platform.outbox WHERE tenant_id = $1 AND event_type = 'subscription.addon_changed' ORDER BY occurred_at`, tenantID)
+	if err != nil {
+		t.Fatalf("query addon events: %v", err)
+	}
+	defer rows.Close()
+	var payloads []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			t.Fatal(err)
+		}
+		payloads = append(payloads, p)
+	}
+	if len(payloads) != 3 {
+		t.Fatalf("addon_changed events = %d, want 3 (attached, quantity_changed, detached)", len(payloads))
+	}
+	for i, want := range []string{`"action": "attached"`, `"action": "quantity_changed"`, `"action": "detached"`} {
+		if !strings.Contains(payloads[i], want) {
+			t.Fatalf("event %d = %s, want %s", i, payloads[i], want)
+		}
 	}
 }
 

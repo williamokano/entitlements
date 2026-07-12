@@ -47,12 +47,23 @@ func (r *Repo) Create(ctx context.Context, s *domain.Subscription) error {
 	return nil
 }
 
-// Update persists a subscription's mutable fields.
+// Update persists a subscription's mutable fields, including the plan pin and
+// any scheduled change.
 func (r *Repo) Update(ctx context.Context, s *domain.Subscription) error {
+	var pendingPV *uuid.UUID
+	var pendingCycle *string
+	if s.Scheduled != nil {
+		pendingPV = &s.Scheduled.PlanVersionID
+		c := string(s.Scheduled.BillingCycle)
+		pendingCycle = &c
+	}
 	_, err := platformpg.Q(ctx, r.pool).Exec(ctx,
 		`UPDATE subscription.subscriptions SET status = $2, current_period_start = $3, current_period_end = $4,
-			trial_ends_at = $5, cancel_at_period_end = $6, updated_at = $7 WHERE id = $1`,
-		s.ID, string(s.Status), s.CurrentPeriodStart, s.CurrentPeriodEnd, s.TrialEndsAt, s.CancelAtPeriodEnd, s.UpdatedAt)
+			trial_ends_at = $5, cancel_at_period_end = $6, updated_at = $7,
+			plan_version_id = $8, billing_cycle = $9, pending_plan_version_id = $10, pending_billing_cycle = $11
+		 WHERE id = $1`,
+		s.ID, string(s.Status), s.CurrentPeriodStart, s.CurrentPeriodEnd, s.TrialEndsAt, s.CancelAtPeriodEnd, s.UpdatedAt,
+		s.PlanVersionID, string(s.BillingCycle), pendingPV, pendingCycle)
 	if err != nil {
 		return fmt.Errorf("subscription: update: %w", err)
 	}
@@ -94,7 +105,7 @@ func (r *Repo) ListTransitions(ctx context.Context, subscriptionID uuid.UUID) ([
 	var out []*domain.Transition
 	for rows.Next() {
 		var (
-			t                domain.Transition
+			t               domain.Transition
 			from, to, event string
 		)
 		if err := rows.Scan(&t.ID, &t.SubscriptionID, &from, &to, &event, &t.Reason, &t.Actor, &t.At); err != nil {
@@ -111,14 +122,16 @@ func (r *Repo) ListTransitions(ctx context.Context, subscriptionID uuid.UUID) ([
 
 func (r *Repo) scanOne(ctx context.Context, where string, args ...any) (*domain.Subscription, error) {
 	var (
-		s      domain.Subscription
-		cycle  string
-		status string
+		s            domain.Subscription
+		cycle        string
+		status       string
+		pendingPV    *uuid.UUID
+		pendingCycle *string
 	)
 	err := platformpg.Q(ctx, r.pool).QueryRow(ctx,
-		`SELECT id, tenant_id, plan_version_id, billing_cycle, status, current_period_start, current_period_end, trial_ends_at, cancel_at_period_end, created_at, updated_at
+		`SELECT id, tenant_id, plan_version_id, billing_cycle, status, current_period_start, current_period_end, trial_ends_at, cancel_at_period_end, pending_plan_version_id, pending_billing_cycle, created_at, updated_at
 		 FROM subscription.subscriptions `+where, args...).
-		Scan(&s.ID, &s.TenantID, &s.PlanVersionID, &cycle, &status, &s.CurrentPeriodStart, &s.CurrentPeriodEnd, &s.TrialEndsAt, &s.CancelAtPeriodEnd, &s.CreatedAt, &s.UpdatedAt)
+		Scan(&s.ID, &s.TenantID, &s.PlanVersionID, &cycle, &status, &s.CurrentPeriodStart, &s.CurrentPeriodEnd, &s.TrialEndsAt, &s.CancelAtPeriodEnd, &pendingPV, &pendingCycle, &s.CreatedAt, &s.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, apperr.NotFound("subscription not found")
 	}
@@ -127,5 +140,77 @@ func (r *Repo) scanOne(ctx context.Context, where string, args ...any) (*domain.
 	}
 	s.BillingCycle = domain.BillingCycle(cycle)
 	s.Status = domain.State(status)
+	if pendingPV != nil && pendingCycle != nil {
+		s.Scheduled = &domain.ScheduledChange{PlanVersionID: *pendingPV, BillingCycle: domain.BillingCycle(*pendingCycle)}
+	}
 	return &s, nil
+}
+
+// GetAddon returns one attached addon by (subscription, addon version).
+func (r *Repo) GetAddon(ctx context.Context, subscriptionID, addonVersionID uuid.UUID) (*domain.Addon, error) {
+	var a domain.Addon
+	err := platformpg.Q(ctx, r.pool).QueryRow(ctx,
+		`SELECT id, subscription_id, addon_version_id, quantity, created_at, updated_at
+		 FROM subscription.subscription_addons WHERE subscription_id = $1 AND addon_version_id = $2`,
+		subscriptionID, addonVersionID).
+		Scan(&a.ID, &a.SubscriptionID, &a.AddonVersionID, &a.Quantity, &a.CreatedAt, &a.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, apperr.NotFound("addon not attached")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("subscription: get addon: %w", err)
+	}
+	return &a, nil
+}
+
+// UpsertAddon inserts an attachment or updates its quantity.
+func (r *Repo) UpsertAddon(ctx context.Context, a *domain.Addon) error {
+	_, err := platformpg.Q(ctx, r.pool).Exec(ctx,
+		`INSERT INTO subscription.subscription_addons (id, subscription_id, addon_version_id, quantity, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6)
+		 ON CONFLICT (subscription_id, addon_version_id)
+		 DO UPDATE SET quantity = EXCLUDED.quantity, updated_at = EXCLUDED.updated_at`,
+		a.ID, a.SubscriptionID, a.AddonVersionID, a.Quantity, a.CreatedAt, a.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("subscription: upsert addon: %w", err)
+	}
+	return nil
+}
+
+// DeleteAddon removes an attachment.
+func (r *Repo) DeleteAddon(ctx context.Context, subscriptionID, addonVersionID uuid.UUID) error {
+	tag, err := platformpg.Q(ctx, r.pool).Exec(ctx,
+		`DELETE FROM subscription.subscription_addons WHERE subscription_id = $1 AND addon_version_id = $2`,
+		subscriptionID, addonVersionID)
+	if err != nil {
+		return fmt.Errorf("subscription: delete addon: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return apperr.NotFound("addon not attached")
+	}
+	return nil
+}
+
+// ListAddons returns a subscription's attached addons, oldest first.
+func (r *Repo) ListAddons(ctx context.Context, subscriptionID uuid.UUID) ([]*domain.Addon, error) {
+	rows, err := platformpg.Q(ctx, r.pool).Query(ctx,
+		`SELECT id, subscription_id, addon_version_id, quantity, created_at, updated_at
+		 FROM subscription.subscription_addons WHERE subscription_id = $1 ORDER BY created_at`, subscriptionID)
+	if err != nil {
+		return nil, fmt.Errorf("subscription: list addons: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*domain.Addon
+	for rows.Next() {
+		var a domain.Addon
+		if err := rows.Scan(&a.ID, &a.SubscriptionID, &a.AddonVersionID, &a.Quantity, &a.CreatedAt, &a.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("subscription: scan addon: %w", err)
+		}
+		out = append(out, &a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("subscription: iterate addons: %w", err)
+	}
+	return out, nil
 }
