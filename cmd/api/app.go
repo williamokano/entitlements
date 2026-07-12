@@ -15,6 +15,7 @@ import (
 	"github.com/williamokano/entitlements/internal/modules/authorization"
 	"github.com/williamokano/entitlements/internal/modules/catalog"
 	"github.com/williamokano/entitlements/internal/modules/example"
+	"github.com/williamokano/entitlements/internal/modules/subscription"
 	"github.com/williamokano/entitlements/internal/modules/tenant"
 	"github.com/williamokano/entitlements/internal/platform/audit"
 	"github.com/williamokano/entitlements/internal/platform/clock"
@@ -75,11 +76,13 @@ func buildApplication(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger
 	if err != nil {
 		return nil, fmt.Errorf("build authentication module: %w", err)
 	}
+	catalogMod := catalog.New(deps)
 	modules := []app.Module{
 		tenantMod,
 		authMod,
 		authzMod,
-		catalog.New(deps),
+		catalogMod,
+		subscription.New(deps, catalogMod.Port()),
 		example.New(deps),
 	}
 

@@ -317,8 +317,10 @@ must be bootstrapped out of band. Wire owner-on-create (or bridge
 - integration: `TestAddonCRUDAndVersionImmutability`.
 - integration: `TestAddonExposedViaCatalogReaderWithDeltas`.
 
-### T-019 · Subscription: core state machine · **L**
+### T-019 · Subscription: core state machine · **L** · ✅ DONE (PR #22)
 **Depends on**: T-017. **Spec**: PLAN.md §5.
+**Note**: a voluntary `paused` state was added (distinct from dunning-driven
+`suspended`) so pause/resume have a target; pause is legal only from `active`.
 **Deliverables**: `Subscription` aggregate (tenant_id — one active per tenant, pinned plan_version_id, billing cycle); explicit transition table for `trialing→active→past_due→grace→suspended→canceled|expired`; transition history (from, to, reason, actor, at); period tracking via `clock`; use cases: create (trial or direct per plan config), cancel (immediate | at period end), reactivate, pause/resume; events for every transition; REST under `/api/v1/subscription`; `ports.SubscriptionReader`.
 **Out of scope**: renewals (T-021), plan changes (T-020), billing calls.
 **Acceptance criteria**: every allowed/denied transition encoded in one table and tested exhaustively; every transition is historied and emits an event atomically; a tenant cannot hold two active subscriptions.

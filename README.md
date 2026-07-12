@@ -14,7 +14,7 @@ See [`docs/PLAN.md`](docs/PLAN.md) for the architecture and
 core) in progress.** The API boots, runs its migrations on startup, and serves
 real endpoints.
 
-Implemented (tasks **T-001 – T-018**):
+Implemented (tasks **T-001 – T-019**):
 
 - **Platform kernel** — config, UUIDv7 IDs, clock, Postgres pool + UnitOfWork
   (tx-in-context), migration runner, transactional outbox + relay worker,
@@ -52,12 +52,18 @@ Implemented (tasks **T-001 – T-018**):
   pricing, a compatible-plan list (a shared compatibility helper other modules
   reuse), a quantity-allowed flag, and entitlement **deltas**
   (`feature_key → limit delta | value override`).
+- **Subscription** module (`/api/v1/subscription`) — a tenant's commitment to a
+  pinned plan version, driven by an explicit state machine
+  (`trialing → active → past_due → grace → suspended | paused → canceled |
+  expired`); one live subscription per tenant, guarded transitions with a full
+  history trail and an event per transition, trial/period tracking, and
+  create / cancel (immediate or at period end) / reactivate / pause / resume.
 - **Example** module (`/api/v1/example/things`) — a reference tenant-scoped
   slice demonstrating the full hexagonal shape and the outbox → consumer flow.
 
-Not yet implemented: the remaining business modules — subscription,
-entitlements, billing (Milestone 3). See [`docs/TASKS.md`](docs/TASKS.md) for the
-full plan.
+Not yet implemented: subscription **renewals & plan changes** (T-020/021),
+entitlements, and billing (Milestone 3). See [`docs/TASKS.md`](docs/TASKS.md) for
+the full plan.
 (Note: the tenant creator is not yet auto-assigned the `owner` role, so an
 initial role assignment currently has to be bootstrapped out of band — see the
 T-016 follow-up in the tasks doc.)
