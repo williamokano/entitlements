@@ -29,7 +29,7 @@ const Page = () => {
               <div className="flex items-center gap-2 md:ms-auto">
                 <nav className="flex items-center gap-x-1" aria-label="Tabs" role="tablist" aria-orientation="horizontal">
                   <Link
-                    to="/apps/ecommerce/products-grid"
+                    to="/demo/apps/ecommerce/products-grid"
                     className="hs-tab-active:bg-primary hs-tab-active:text-white bg-primary/15 text-primary hover:bg-primary btn btn-icon active size-9.25! hover:text-white"
                     id="contact-tab-1"
                     aria-selected="true"
@@ -40,7 +40,7 @@ const Page = () => {
                     <Icon icon="apps" className="text-lg" />
                   </Link>
                   <Link
-                    to="/apps/ecommerce/products"
+                    to="/demo/apps/ecommerce/products"
                     className="hs-tab-active:bg-primary hs-tab-active:text-white bg-primary/15 text-primary hover:bg-primary btn btn-icon size-9.25! hover:text-white"
                     id="contact-tab-2"
                     aria-selected="false"
@@ -51,7 +51,7 @@ const Page = () => {
                     <Icon icon="list-check" className="text-lg" />
                   </Link>
                 </nav>
-                <Link to="/apps/ecommerce/product-add" className="btn bg-danger text-white hover:bg-danger-hover">
+                <Link to="/demo/apps/ecommerce/product-add" className="btn bg-danger text-white hover:bg-danger-hover">
                   <Icon icon="plus" />
                   Add Product
                 </Link>

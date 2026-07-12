@@ -11,7 +11,7 @@ const ProductDetails = () => {
             <Icon icon="star-filled" key={index} className="text-warning text-base" />
           ))}
           <span>
-            <Link to="/apps/ecommerce/reviews" className="hover:text-primary ms-1 font-medium">
+            <Link to="/demo/apps/ecommerce/reviews" className="hover:text-primary ms-1 font-medium">
               (859 Reviews)
             </Link>
           </span>

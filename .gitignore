@@ -33,3 +33,8 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Frontend (admin/)
+admin/node_modules/
+admin/dist/
+admin/*.tsbuildinfo

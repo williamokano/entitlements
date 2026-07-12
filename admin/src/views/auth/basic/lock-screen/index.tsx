@@ -40,7 +40,7 @@ const Page = () => {
               </form>
               <p className="text-default-400 mt-7.5 text-center">
                 Not you? Return to&nbsp;
-                <Link to="/auth/sign-in" className="text-primary font-semibol underline underline-offset-3">
+                <Link to="/demo/auth/sign-in" className="text-primary font-semibol underline underline-offset-3">
                   Sign in
                 </Link>
               </p>

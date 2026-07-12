@@ -28,7 +28,7 @@ const TopCountries = () => {
             </div>
           ))}
           <div className="text-center mt-2.5">
-            <a href="/apps/chat" className="hover:text-primary underline font-semibold link-offset-3 flex items-center justify-center gap-1">
+            <a href="/demo/apps/chat" className="hover:text-primary underline font-semibold link-offset-3 flex items-center justify-center gap-1">
               View all Countries <Icon icon="world" />
             </a>
           </div>

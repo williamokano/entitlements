@@ -147,7 +147,7 @@ export type TrafficRow = {
 
 export const trafficTableData: TrafficRow[] = [
   {
-    url: '/dashboard',
+    url: '/demo/dashboard',
     views: '9.8k',
     uniques: '8.5k',
   },
@@ -157,12 +157,12 @@ export const trafficTableData: TrafficRow[] = [
     uniques: '7.1k',
   },
   {
-    url: '/apps/projects-overview',
+    url: '/demo/apps/projects-overview',
     views: '7.6k',
     uniques: '6.2k',
   },
   {
-    url: '/pages/contact',
+    url: '/demo/pages/contact',
     views: '5.9k',
     uniques: '4.8k',
   },

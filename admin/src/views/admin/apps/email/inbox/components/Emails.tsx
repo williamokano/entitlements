@@ -56,7 +56,7 @@ const Emails = () => {
                       </td>
 
                       <td>
-                        <a href="/apps/email/details" className="hover:text-primary font-semibold">
+                        <a href="/demo/apps/email/details" className="hover:text-primary font-semibold">
                           {email.subject}
                         </a>
                         <span className="hidden lg:inline-block">—</span>

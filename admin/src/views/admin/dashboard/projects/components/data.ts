@@ -402,7 +402,7 @@ export const timelineEvents: TimelineEvent[] = [
     tagVariant: 'bg-info/15 text-info',
     userName: 'Natalie Brooks',
     userImage: user6,
-    userLink: '/pages/profile',
+    userLink: '/demo/pages/profile',
     hasDivider: true,
   },
   {
@@ -416,7 +416,7 @@ export const timelineEvents: TimelineEvent[] = [
     tagVariant: 'bg-secondary/15 text-secondary',
     userName: 'Oliver Grant',
     userImage: user4,
-    userLink: '/pages/profile',
+    userLink: '/demo/pages/profile',
     hasDivider: true,
   },
   {
@@ -430,7 +430,7 @@ export const timelineEvents: TimelineEvent[] = [
     tagVariant: 'bg-success/15 text-success',
     userName: 'Clara Jensen',
     userImage: user9,
-    userLink: '/pages/profile',
+    userLink: '/demo/pages/profile',
     hasDivider: true,
   },
   {
@@ -444,7 +444,7 @@ export const timelineEvents: TimelineEvent[] = [
     tagVariant: 'bg-danger/15 text-danger',
     userName: 'Leo Armstrong',
     userImage: user10,
-    userLink: '/pages/profile',
+    userLink: '/demo/pages/profile',
     hasDivider: true,
   },
   {
@@ -458,7 +458,7 @@ export const timelineEvents: TimelineEvent[] = [
     tagVariant: 'bg-warning/15 text-warning',
     userName: 'Liam Carter',
     userImage: user8,
-    userLink: '/pages/profile',
+    userLink: '/demo/pages/profile',
     hasDivider: true,
   },
   {
@@ -472,7 +472,7 @@ export const timelineEvents: TimelineEvent[] = [
     tagVariant: 'bg-primary/15 text-primary',
     userName: 'Emma Davis',
     userImage: user7,
-    userLink: '/pages/profile',
+    userLink: '/demo/pages/profile',
     hasDivider: false,
   },
 ]

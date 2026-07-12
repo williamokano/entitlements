@@ -108,8 +108,8 @@ never baked into the JS bundle.
   - `subdomain`: the SPA is served on `*.example.com`; the backend resolves the
     tenant from the Host header — the client sends requests to the same origin
     (or forwards the host).
-  - `header`: the client sends `X-Tenant-Slug`/`X-Tenant-ID` explicitly (from
-    config or the tenant switcher).
+  - `header`: the client sends `X-Tenant-ID` explicitly (from config or the
+    tenant switcher — the backend header carries the tenant UUID).
 
 ## 4. API client & auth conventions
 
@@ -118,10 +118,12 @@ never baked into the JS bundle.
   injects the tenant header per tenant mode, and parses **RFC 7807
   problem+json** errors into a typed `ApiError{status, title, detail}` that
   pages render via toasts/inline form errors.
-- Auth store (`src/lib/auth.ts` + reworked `hooks/useAuth.ts`): keeps the
-  access/refresh token pair, transparently calls `POST /api/v1/auth/refresh` on
-  401 once (rotation-aware — a refresh reuse means hard logout), exposes
-  `login/logout/register/isAuthenticated/principal`.
+- Auth store (`src/lib/tokens.ts` + `src/lib/auth.ts` + reworked
+  `hooks/useAuth.ts`): keeps the access/refresh token pair (localStorage), the
+  api client transparently calls `POST /api/v1/auth/refresh` on 401 once
+  (rotation-aware — a rejected refresh means hard logout), exposes
+  `login/logout/isAuthenticated` (register etc. arrive with F-003). The demo
+  keeps the theme's dummy hook as `hooks/useDemoAuth.ts`.
 - Idempotency: mutating requests that the backend guards (per T-008) send an
   `Idempotency-Key` header (uuid per logical submit).
 - Protected routes: a `RequireAuth` wrapper around the app layout redirects to
@@ -135,8 +137,12 @@ never baked into the JS bundle.
   Live next to the code (`*.test.tsx`), run with `npm test` → CI job.
 - Every F-task card in `docs/TASKS.md` lists expected tests, same contract as
   backend tasks.
-- Gates on every PR touching `admin/`: `npm run lint`, `tsc --noEmit` (via
-  `npm run build`), `npm test`.
+- Gates on every PR touching `admin/` (path-filtered CI job): `npm run lint`,
+  `npm run build` (twice — with and without `VITE_ENABLE_DEMO`), `npm test`.
+  Note: the vendored theme is neither lint- nor `tsc`-clean, so eslint ignores
+  the vendored demo views + a few theme-shared modules (list in
+  `admin/eslint.config.js`) and the build is pure `vite build` without a `tsc`
+  pass — OUR code must lint clean.
 - E2E (Playwright against the real Go API) arrives with the hardening milestone.
 
 ## 6. Definition of done — frontend rule

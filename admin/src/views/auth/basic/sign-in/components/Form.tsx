@@ -1,4 +1,4 @@
-import { useAuth } from '@/hooks/useAuth'
+import { useDemoAuth as useAuth } from '@/hooks/useDemoAuth'
 import { Link } from 'react-router'
 import { ChangeEvent, useState } from 'react'
 
@@ -49,7 +49,7 @@ const Form = () => {
             Keep me signed in
           </label>
         </div>
-        <Link to="/auth/reset-pass" className="text-default-400 underline underline-offset-4">
+        <Link to="/demo/auth/reset-pass" className="text-default-400 underline underline-offset-4">
           Forgot Password?
         </Link>
       </div>

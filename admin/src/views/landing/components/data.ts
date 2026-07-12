@@ -208,7 +208,7 @@ export const blogs: BlogType[] = [
       name: 'Michael Turner',
       image: user4,
     },
-    url: '/apps/blog/article',
+    url: '/demo/apps/blog/article',
   },
   {
     category: 'Data Science',
@@ -222,7 +222,7 @@ export const blogs: BlogType[] = [
       name: 'Olivia Brown',
       image: user1,
     },
-    url: '/apps/blog/article',
+    url: '/demo/apps/blog/article',
   },
   {
     category: 'Business',
@@ -236,7 +236,7 @@ export const blogs: BlogType[] = [
       name: 'David Clark',
       image: user7,
     },
-    url: '/apps/blog/article',
+    url: '/demo/apps/blog/article',
   },
 ]
 

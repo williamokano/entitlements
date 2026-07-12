@@ -6,7 +6,7 @@ const ListSidebar = () => {
     <>
       <div className="col-span-1">
         <div className="mb-7.5">
-          <a href="/apps/blog/add" className="btn bg-primary btn-lg w-full text-sm text-white hover:bg-primary-hover">
+          <a href="/demo/apps/blog/add" className="btn bg-primary btn-lg w-full text-sm text-white hover:bg-primary-hover">
             <Icon icon="circle-dashed-plus" />
             Add New Article
           </a>

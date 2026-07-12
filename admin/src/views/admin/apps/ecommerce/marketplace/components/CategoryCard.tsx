@@ -18,7 +18,7 @@ const CategoryCard = ({ category }: { category: CategoryType }) => {
             </li>
           ))}
         </ul>
-        <Link to="/apps/ecommerce/products-grid" className="text-default-700 hover:text-primary my-5 inline-flex items-center gap-0.5 font-semibold">
+        <Link to="/demo/apps/ecommerce/products-grid" className="text-default-700 hover:text-primary my-5 inline-flex items-center gap-0.5 font-semibold">
           View All
           <Icon icon="arrow-right" className="text-base" />
         </Link>

@@ -67,11 +67,11 @@ const Page = () => {
 
                 <div className="md:ms-auto">
                   <nav className="flex items-center gap-x-1">
-                    <Link to="/apps/projects/grid" className="btn bg-primary btn-icon text-white hover:bg-primary-hover">
+                    <Link to="/demo/apps/projects/grid" className="btn bg-primary btn-icon text-white hover:bg-primary-hover">
                       <Icon icon="category" className="text-lg" />
                     </Link>
 
-                    <Link to="/apps/projects/list" className="btn bg-primary/15 text-primary btn-icon hover:bg-primary hover:text-white">
+                    <Link to="/demo/apps/projects/list" className="btn bg-primary/15 text-primary btn-icon hover:bg-primary hover:text-white">
                       <Icon icon="list-check" className="text-lg" />
                     </Link>
                   </nav>

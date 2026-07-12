@@ -76,7 +76,7 @@ const BasicForm = () => {
             </div>
             <h4 className="mb-2 text-lg">Don&apos;t Have an Account Yet?</h4>
             <p className="text-default-400 mb-5">Join us today and unlock access to personalized features, updates, and more!</p>
-            <Link to="/auth/sign-up" className="text-primary underline font-semibold">
+            <Link to="/demo/auth/sign-up" className="text-primary underline font-semibold">
               Create Your Account
             </Link>
           </div>
@@ -157,7 +157,7 @@ const ModalForm = () => {
                       </div>
                       <h4 className="mb-2 text-lg">Do&apos;t Have an Account Yet?</h4>
                       <p className="text-default-400 mb-5">Join us today and unlock access to personalized features, updates, and more!</p>
-                      <Link to="/auth/sign-up" className="text-primary underline font-semibold">
+                      <Link to="/demo/auth/sign-up" className="text-primary underline font-semibold">
                         Create Your Account
                       </Link>
                     </div>

@@ -49,7 +49,7 @@ const Page = () => {
                       Keep me signed in
                     </label>
                   </div>
-                  <Link to="/auth/split/reset-pass" className="text-default-400 underline underline-offset-4">
+                  <Link to="/demo/auth/split/reset-pass" className="text-default-400 underline underline-offset-4">
                     Forgot Password?
                   </Link>
                 </div>
@@ -61,7 +61,7 @@ const Page = () => {
               </form>
               <p className="text-default-400 mt-7.5 text-center">
                 New here?&nbsp;
-                <Link to="/auth/split/sign-up" className="text-primary font-semibold underline underline-offset-4">
+                <Link to="/demo/auth/split/sign-up" className="text-primary font-semibold underline underline-offset-4">
                   Create an account
                 </Link>
               </p>

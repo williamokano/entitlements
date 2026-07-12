@@ -52,7 +52,7 @@ export const clientData: ClientType[] = [
     type: 'Project',
     role: 'Frontend Developer',
     status: 'active',
-    href: '/pages/profile',
+    href: '/demo/pages/profile',
   },
   {
     user: {
@@ -69,7 +69,7 @@ export const clientData: ClientType[] = [
     type: 'Contract',
     role: 'UI/UX Designer',
     status: 'pending',
-    href: '/pages/profile',
+    href: '/demo/pages/profile',
   },
   {
     user: {
@@ -86,7 +86,7 @@ export const clientData: ClientType[] = [
     type: 'Project',
     role: 'Visual Designer',
     status: 'active',
-    href: '/pages/profile',
+    href: '/demo/pages/profile',
   },
   {
     user: {
@@ -103,7 +103,7 @@ export const clientData: ClientType[] = [
     type: 'Contract',
     role: 'Full Stack Developer',
     status: 'inactive',
-    href: '/pages/profile',
+    href: '/demo/pages/profile',
   },
   {
     user: {
@@ -120,7 +120,7 @@ export const clientData: ClientType[] = [
     type: 'Project',
     role: 'Brand Strategist',
     status: 'active',
-    href: '/pages/profile',
+    href: '/demo/pages/profile',
   },
   {
     user: {
@@ -137,7 +137,7 @@ export const clientData: ClientType[] = [
     type: 'Retainer',
     role: 'Creative Director',
     status: 'pending',
-    href: '/pages/profile',
+    href: '/demo/pages/profile',
   },
   {
     user: {
@@ -154,7 +154,7 @@ export const clientData: ClientType[] = [
     type: 'Project',
     role: 'Product Designer',
     status: 'active',
-    href: '/pages/profile',
+    href: '/demo/pages/profile',
   },
   {
     user: {
@@ -171,7 +171,7 @@ export const clientData: ClientType[] = [
     type: 'Contract',
     role: 'Backend Engineer',
     status: 'active',
-    href: '/pages/profile',
+    href: '/demo/pages/profile',
   },
   {
     user: {
@@ -188,7 +188,7 @@ export const clientData: ClientType[] = [
     type: 'Retainer',
     role: 'UX Consultant',
     status: 'pending',
-    href: '/pages/profile',
+    href: '/demo/pages/profile',
   },
   {
     user: {
@@ -205,6 +205,6 @@ export const clientData: ClientType[] = [
     type: 'Contract',
     role: 'Web Developer',
     status: 'active',
-    href: '/pages/profile',
+    href: '/demo/pages/profile',
   },
 ]

@@ -133,7 +133,7 @@ const SellerProducts = () => {
               </option>
             ))}
           </select>
-          <Link to="/apps/ecommerce/product-add" className="btn bg-danger text-nowrap text-white hover:bg-danger-hover">
+          <Link to="/demo/apps/ecommerce/product-add" className="btn bg-danger text-nowrap text-white hover:bg-danger-hover">
             <Icon icon="plus" />
             Add Product
           </Link>

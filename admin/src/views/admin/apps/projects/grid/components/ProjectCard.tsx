@@ -18,7 +18,7 @@ const ProjectCard = ({ project }: { project: ProjectType }) => {
           <div className="flex-1">
             <div className="flex items-start gap-3">
               <h5 className="hover:text-primary mb-1.25 text-md flex items-center">
-                <Link to="/apps/projects/details" className="leading-tight hover:text-primary">
+                <Link to="/demo/apps/projects/details" className="leading-tight hover:text-primary">
                   {title}
                 </Link>
               </h5>

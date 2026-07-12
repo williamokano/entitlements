@@ -9,6 +9,58 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      admin: ${{ steps.filter.outputs.admin }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Filter paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            admin:
+              - 'admin/**'
+              - '.github/workflows/ci.yml'
+
+  admin:
+    name: admin · lint · build · test
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.admin == 'true'
+    defaults:
+      run:
+        working-directory: admin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build (demo enabled)
+        run: npm run build
+
+      - name: Build (demo disabled — bundle must drop the demo)
+        run: VITE_ENABLE_DEMO=false npm run build
+
+      - name: Test
+        run: npm test
+
   build:
     name: lint · test · build
     runs-on: ubuntu-latest

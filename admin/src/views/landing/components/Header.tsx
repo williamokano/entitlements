@@ -67,22 +67,22 @@ export default function Header() {
               </div>
 
               <div className="lg:hidden flex lg:items-center gap-x-2">
-                <Link to="/auth/sign-in" className="btn font-semibold ps-2">
+                <Link to="/demo/auth/sign-in" className="btn font-semibold ps-2">
                   SIGN IN
                 </Link>
 
-                <Link to="/auth/sign-up" className="btn btn-sm bg-primary text-white hover:bg-primary-hover">
+                <Link to="/demo/auth/sign-up" className="btn btn-sm bg-primary text-white hover:bg-primary-hover">
                   Sign Up
                 </Link>
               </div>
             </div>
 
             <div className="lg:flex hidden lg:items-center gap-x-2">
-              <Link to="/auth/sign-in" className="btn font-semibold ps-2">
+              <Link to="/demo/auth/sign-in" className="btn font-semibold ps-2">
                 SIGN IN
               </Link>
 
-              <Link to="/auth/sign-up" className="btn btn-sm bg-primary text-white hover:bg-primary-hover">
+              <Link to="/demo/auth/sign-up" className="btn btn-sm bg-primary text-white hover:bg-primary-hover">
                 Sign Up
               </Link>
             </div>

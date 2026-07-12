@@ -14,7 +14,7 @@ const EmailDetail = () => {
           <div className="card-header justify-between">
             <div className="flex flex-wrap items-center gap-1.25">
               <span className="hs-tooltip [--placement:top] inline-block">
-                <Link to="/apps/email/inbox" className="hs-tooltip-toggle btn btn-icon size-8 border border-default-300">
+                <Link to="/demo/apps/email/inbox" className="hs-tooltip-toggle btn btn-icon size-8 border border-default-300">
                   <Icon icon="arrow-left" className="text-base text-default-800" />
                   <span className="hs-tooltip-content hs-tooltip-shown:opacity-100 hs-tooltip-shown:visible opacity-0 transition-opacity inline-block absolute invisible z-90 py-1 px-2 bg-dark text-xs font-medium text-white rounded" role="tooltip">
                     Back to Inbox
@@ -24,7 +24,7 @@ const EmailDetail = () => {
 
               {emailActionData.map((item, idx) => (
                 <span className="hs-tooltip [--placement:top] inline-block" key={idx}>
-                  <Link to="/apps/email/inbox" className="hs-tooltip-toggle btn btn-icon size-8 border border-default-300">
+                  <Link to="/demo/apps/email/inbox" className="hs-tooltip-toggle btn btn-icon size-8 border border-default-300">
                     <Icon icon={item.icon} className="text-base text-default-800" />
                     <span className="hs-tooltip-content hs-tooltip-shown:opacity-100 hs-tooltip-shown:visible opacity-0 transition-opacity inline-block absolute invisible z-10 py-1 px-2 bg-dark text-xs font-medium text-white rounded" role="tooltip">
                       {item.label}

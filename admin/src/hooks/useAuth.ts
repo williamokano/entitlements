@@ -1,43 +1,40 @@
+import { useState, useSyncExternalStore } from 'react'
 import { useNavigate } from 'react-router'
-import { useState } from 'react'
-import { useSessionStorage } from 'usehooks-ts'
+import { ApiError } from '@/lib/api'
+import { isAuthenticated as isAuthenticatedSnapshot, login as authLogin, logout as authLogout, subscribe } from '@/lib/auth'
+
+/**
+ * Real auth hook for the product screens — wraps the auth store in lib/auth.ts.
+ * (The vendored theme demo keeps its own dummy hook: hooks/useDemoAuth.ts.)
+ */
 export const useAuth = () => {
   const navigate = useNavigate()
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [token, setToken, removeToken] = useSessionStorage<string | null>('token', null)
+  const isAuthenticated = useSyncExternalStore(subscribe, isAuthenticatedSnapshot)
 
-  const dummyUser = {
-    email: 'admin@example.com',
-    password: 'password',
-    token: 'auth-token',
-  }
-
-  const login = (email: string, password: string) => {
+  const login = async (email: string, password: string) => {
+    setLoading(true)
+    setError(null)
     try {
-      setLoading(true)
-      setError(null)
-
-      if (email === dummyUser.email && password === dummyUser.password) {
-        setToken(dummyUser.token)
-        navigate('/', { replace: true })
+      await authLogin(email, password)
+      navigate('/', { replace: true })
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.detail || err.title)
       } else {
-        throw new Error('Invalid email or password')
+        setError('Unable to sign in. Please try again.')
       }
-    } catch (err: any) {
-      setError(err.message)
     } finally {
       setLoading(false)
     }
   }
 
-  const logout = () => {
-    removeToken()
+  const logout = async () => {
+    await authLogout()
     navigate('/auth/sign-in', { replace: true })
   }
-
-  const isAuthenticated = token
 
   return {
     login,

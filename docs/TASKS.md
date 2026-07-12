@@ -484,7 +484,7 @@ implemented in parallel — with each other and with backend lanes. From T-020 o
 new backend tasks carry their frontend per DoD item 7 (in-task or as a new
 paired F-card).
 
-### F-001 · Frontend foundation: runtime config, API client, auth store, app shell, demo aside · **L**
+### F-001 · Frontend foundation: runtime config, API client, auth store, app shell, demo aside · **L** · ✅ DONE (PR #25)
 **Depends on**: backend T-013/T-011 (endpoints exist — already merged). Blocks every other F-task.
 **Deliverables**:
 - Demo preserved on the side: all theme routes re-mounted under `/demo/*` (mechanical prefix pass; demo views untouched); `VITE_ENABLE_DEMO` flag drops the demo bundle from production builds.
@@ -499,6 +499,8 @@ paired F-card).
 - unit: api client attaches bearer + tenant header (header mode) and parses problem+json into `ApiError{status,title,detail}`.
 - unit: a 401 triggers exactly one refresh-and-retry; a failed refresh clears the session (hard logout).
 - component: `RequireAuth` redirects anonymous to `/auth/sign-in` and renders children when authenticated.
+
+**Implementation notes** (PR #25): the vendored theme is not lint-/typecheck-clean, so `eslint` ignores the vendored demo views + a few theme-shared modules (documented in `admin/eslint.config.js`) and `npm run build` stays pure `vite build` (no `tsc`) — our own code lints clean. The demo keeps its dummy auth as `hooks/useDemoAuth.ts`; a minimal real sign-in page ships at `/auth/sign-in` (full auth suite is F-003).
 
 ### F-002 · Frontend infra: generic Docker image, nginx, compose, CI publish · **M**
 **Depends on**: F-001.

@@ -29,7 +29,7 @@ const OrderSummary = () => {
             <h5 className="font-bold">$2,390.40</h5>
           </li>
         </ul>
-        <Link to="/apps/ecommerce/checkout" className="mb-5 btn btn-lg bg-danger text-base w-full text-white hover:bg-danger-hover">
+        <Link to="/demo/apps/ecommerce/checkout" className="mb-5 btn btn-lg bg-danger text-base w-full text-white hover:bg-danger-hover">
           &nbsp; Proceed to Checkout
         </Link>
         <p className="text-default-400 text-center">

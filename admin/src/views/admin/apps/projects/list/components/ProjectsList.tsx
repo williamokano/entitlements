@@ -31,7 +31,7 @@ const ProjectsList = () => {
 
             <div className="flex-1">
               <h5 className="hover:text-primary mb-1.25 flex items-center">
-                <Link to="/apps/projects/details">{row.original.title}</Link>
+                <Link to="/demo/apps/projects/details">{row.original.title}</Link>
               </h5>
               <p className="text-default-400 text-2xs">Updated {row.original.updatedTime}</p>
             </div>
@@ -247,11 +247,11 @@ const ProjectsList = () => {
 
           <div>
             <nav className="flex items-center gap-x-1">
-              <Link to="/apps/projects/grid" className="btn bg-primary/15 text-primary btn-icon hover:bg-primary hover:text-white">
+              <Link to="/demo/apps/projects/grid" className="btn bg-primary/15 text-primary btn-icon hover:bg-primary hover:text-white">
                 <Icon icon="category" className="text-lg" />
               </Link>
 
-              <Link to="/apps/projects/list" className="btn bg-primary btn-icon text-white hover:bg-primary-hover">
+              <Link to="/demo/apps/projects/list" className="btn bg-primary btn-icon text-white hover:bg-primary-hover">
                 <Icon icon="list-check" className="text-lg" />
               </Link>
             </nav>

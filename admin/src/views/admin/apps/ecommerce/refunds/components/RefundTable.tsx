@@ -26,7 +26,7 @@ const RefundTable = () => {
       header: 'Order Id',
       cell: ({ row }) => (
         <h5 className="text-sm">
-          <Link to="/apps/ecommerce/order/details" className="hover:text-primary">
+          <Link to="/demo/apps/ecommerce/order/details" className="hover:text-primary">
             {row.original.orderId}
           </Link>
         </h5>

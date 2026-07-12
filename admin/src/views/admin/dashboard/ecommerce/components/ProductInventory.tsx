@@ -52,7 +52,7 @@ const ProductInventory = () => {
                     <h5 className="text-sm mt-1.25 mb-2 font-normal">
                       <Rating rating={product.ratings} className={'d-inline-flex align-items-center gap-1'} />
                       <span className="ms-1.25">
-                        <a href="/apps/ecommerce/reviews" className="font-semibold hover:text-primary">
+                        <a href="/demo/apps/ecommerce/reviews" className="font-semibold hover:text-primary">
                           ({product.reviews})
                         </a>
                       </span>

@@ -259,7 +259,7 @@ const OrdersStatics = () => {
             ))}
           </div>
           <div className="text-center my-5">
-            <Link to="/apps/chat" className="underline font-semibold flex gap-1 justify-center items-center hover:text-primary link-offset-3">
+            <Link to="/demo/apps/chat" className="underline font-semibold flex gap-1 justify-center items-center hover:text-primary link-offset-3">
               {' '}
               View all Reports <Icon icon="send-2" />{' '}
             </Link>

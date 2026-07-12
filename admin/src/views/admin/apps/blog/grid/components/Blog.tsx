@@ -24,7 +24,7 @@ export const BlogGrid = ({ blog }: { blog: BlogType }) => {
           <div className="card-body">
             <span className="badge badge-label bg-white/25 text-white mb-5">{category}</span>
             <h6 className="card-title mb-2.5">
-              <a href="/apps/blog/article" className="text-base text-white">
+              <a href="/demo/apps/blog/article" className="text-base text-white">
                 {title}
               </a>
             </h6>
@@ -67,7 +67,7 @@ export const BlogGrid = ({ blog }: { blog: BlogType }) => {
                 </h5>
               </div>
             </div>
-            <a className="flex items-center gap-1.25 font-semibold text-white" href="/apps/blog/article">
+            <a className="flex items-center gap-1.25 font-semibold text-white" href="/demo/apps/blog/article">
               Read more
               <Icon icon="arrow-right" />
             </a>
@@ -86,7 +86,7 @@ export const BlogGrid = ({ blog }: { blog: BlogType }) => {
           <div className="card-body">
             {!image && <div className="badge badge-label bg-dark text-white mb-base">{category}</div>}
             <h6 className="card-title mb-2.5">
-              <a href="/apps/blog/article" className="text-base hover:text-primary">
+              <a href="/demo/apps/blog/article" className="text-base hover:text-primary">
                 {title}
               </a>
             </h6>
@@ -128,7 +128,7 @@ export const BlogGrid = ({ blog }: { blog: BlogType }) => {
                 </h5>
               </div>
             </div>
-            <a className="text-primary flex items-center gap-1.25 font-semibold" href="/apps/blog/article">
+            <a className="text-primary flex items-center gap-1.25 font-semibold" href="/demo/apps/blog/article">
               Read more
               <Icon icon="arrow-right" />
             </a>
