@@ -48,6 +48,7 @@ type Service struct {
 	refresh         *domain.RefreshService
 	refreshRaw      domain.RefreshRepository
 	authTokens      domain.AuthTokenRepository
+	apiKeys         domain.APIKeyRepository
 	signer          *security.Signer
 	ids             id.Generator
 	clk             clock.Clock
@@ -79,6 +80,7 @@ func New(
 	users domain.UserRepository,
 	refreshRepo domain.RefreshRepository,
 	authTokens domain.AuthTokenRepository,
+	apiKeys domain.APIKeyRepository,
 	signer *security.Signer,
 	ids id.Generator,
 	clk clock.Clock,
@@ -91,6 +93,7 @@ func New(
 		refresh:         domain.NewRefreshService(refreshRepo),
 		refreshRaw:      refreshRepo,
 		authTokens:      authTokens,
+		apiKeys:         apiKeys,
 		signer:          signer,
 		ids:             ids,
 		clk:             clk,

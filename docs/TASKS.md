@@ -245,7 +245,7 @@ graph TD
 - `TestSessionListAndRevokeOthersKeepsCurrent` — N sessions → revoke-others → only current refresh works.
 - unit: `TestEmailSenderPortReceivesRenderedTokenLink` — recording sender.
 
-### T-014 · Auth middleware + API keys (machine auth) · **M**
+### T-014 · Auth middleware + API keys (machine auth) · **M** · ✅ DONE (PR #17)
 **Depends on**: T-012.
 **Deliverables**: HTTP middleware validating `Authorization: Bearer` JWT → `Principal{Kind: user}`; API keys per tenant (prefix + argon2id-hashed secret shown once, scopes, `last_used_at`, revocation); middleware branch for `Authorization: ApiKey …` → `Principal{Kind: machine, Scopes}`; REST key management.
 **Acceptance criteria**: both credential kinds populate `authctx` uniformly; key secrets irrecoverable after creation; revocation is immediate.

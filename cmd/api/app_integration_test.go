@@ -71,6 +71,103 @@ func testApp(t *testing.T) *application {
 	return a
 }
 
+func TestAPIKeyManagementAndMachineAuthE2E(t *testing.T) {
+	a := testApp(t)
+	srv := httptest.NewServer(a.handler)
+	defer srv.Close()
+
+	// A user registers and logs in to get an access token.
+	if _, err := http.Post(srv.URL+"/api/v1/auth/register", "application/json",
+		strings.NewReader(`{"email":"owner@example.com","password":"owner-password-x"}`)); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	loginResp, err := http.Post(srv.URL+"/api/v1/auth/login", "application/json",
+		strings.NewReader(`{"email":"owner@example.com","password":"owner-password-x"}`))
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	lb, _ := io.ReadAll(loginResp.Body)
+	_ = loginResp.Body.Close()
+	var login struct {
+		AccessToken string `json:"access_token"`
+	}
+	_ = json.Unmarshal(lb, &login)
+
+	tenantID := createTenant(t, srv.URL, "keyco")
+
+	// Managing keys without a credential is rejected by RequireAuth (the request
+	// carries a tenant so it clears tenant resolution and reaches the guard).
+	anonReq, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/v1/api-keys", strings.NewReader(`{"name":"x"}`))
+	anonReq.Header.Set("Content-Type", "application/json")
+	anonReq.Header.Set(tenant.HeaderTenantID, tenantID.String())
+	anon, err := http.DefaultClient.Do(anonReq)
+	if err != nil {
+		t.Fatalf("anon key create: %v", err)
+	}
+	_ = anon.Body.Close()
+	if anon.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("anonymous key create = %d, want 401", anon.StatusCode)
+	}
+
+	// The user creates a key for their tenant (Bearer JWT + X-Tenant-ID).
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/v1/api-keys",
+		strings.NewReader(`{"name":"ci","scopes":["things:write"]}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+login.AccessToken)
+	req.Header.Set(tenant.HeaderTenantID, tenantID.String())
+	createResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("create key: %v", err)
+	}
+	cb, _ := io.ReadAll(createResp.Body)
+	_ = createResp.Body.Close()
+	if createResp.StatusCode != http.StatusCreated {
+		t.Fatalf("create key = %d (%s), want 201", createResp.StatusCode, cb)
+	}
+	var key struct {
+		ID     uuid.UUID `json:"id"`
+		APIKey string    `json:"api_key"`
+	}
+	if err := json.Unmarshal(cb, &key); err != nil {
+		t.Fatalf("decode key: %v", err)
+	}
+
+	// The API key authenticates a tenant-scoped business route WITHOUT an
+	// X-Tenant-ID header — the tenant is derived from the key.
+	thingReq, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/v1/example/things",
+		strings.NewReader(`{"name":"via-key"}`))
+	thingReq.Header.Set("Content-Type", "application/json")
+	thingReq.Header.Set("Authorization", "ApiKey "+key.APIKey)
+	thingResp, err := http.DefaultClient.Do(thingReq)
+	if err != nil {
+		t.Fatalf("machine call: %v", err)
+	}
+	_ = thingResp.Body.Close()
+	if thingResp.StatusCode != http.StatusCreated {
+		t.Fatalf("machine-authenticated thing create = %d, want 201 (tenant from key)", thingResp.StatusCode)
+	}
+
+	// Revoke the key; it is then rejected.
+	delReq, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/api-keys/"+key.ID.String(), nil)
+	delReq.Header.Set("Authorization", "Bearer "+login.AccessToken)
+	delReq.Header.Set(tenant.HeaderTenantID, tenantID.String())
+	delResp, _ := http.DefaultClient.Do(delReq)
+	_ = delResp.Body.Close()
+	if delResp.StatusCode != http.StatusNoContent {
+		t.Fatalf("revoke = %d, want 204", delResp.StatusCode)
+	}
+
+	revokedReq, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/v1/example/things",
+		strings.NewReader(`{"name":"nope"}`))
+	revokedReq.Header.Set("Content-Type", "application/json")
+	revokedReq.Header.Set("Authorization", "ApiKey "+key.APIKey)
+	revokedResp, _ := http.DefaultClient.Do(revokedReq)
+	_ = revokedResp.Body.Close()
+	if revokedResp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("revoked-key call = %d, want 401", revokedResp.StatusCode)
+	}
+}
+
 func TestCompositionRootBootsAndServesHealthz(t *testing.T) {
 	a := testApp(t)
 	srv := httptest.NewServer(a.handler)

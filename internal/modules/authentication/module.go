@@ -102,7 +102,8 @@ func New(deps app.Deps, opts ...Option) (*Module, error) {
 
 	repo := pgadapter.New(deps.Pool)
 	authTokens := pgadapter.NewAuthTokens(deps.Pool)
-	m.svc = service.New(deps.UnitOfWork, deps.Outbox, repo, repo, authTokens, signer, deps.IDs, deps.Clock, service.Config{
+	apiKeys := pgadapter.NewAPIKeys(deps.Pool)
+	m.svc = service.New(deps.UnitOfWork, deps.Outbox, repo, repo, authTokens, apiKeys, signer, deps.IDs, deps.Clock, service.Config{
 		Sender:          m.sender,
 		Audit:           deps.Audit,
 		BaseURL:         cfg.PublicBaseURL,
@@ -131,6 +132,11 @@ func (m *Module) Name() string { return "auth" }
 
 // Handler is the module's HTTP handler, mounted under /api/v1/auth.
 func (m *Module) Handler() http.Handler { return m.handler }
+
+// APIKeysHandler is the tenant-scoped API-key management handler. Unlike the
+// global-identity routes under /api/v1/auth, it is mounted separately by the
+// composition root at /api/v1/api-keys, behind tenant resolution and RequireAuth.
+func (m *Module) APIKeysHandler() http.Handler { return rest.NewAPIKeys(m.svc) }
 
 // Subscriptions is empty: the authentication module publishes events but does
 // not consume any (yet).

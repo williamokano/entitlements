@@ -52,9 +52,12 @@ func TestTenantClaimAndPrincipalRoundTrip(t *testing.T) {
 		t.Fatal("empty tenant claim reported present")
 	}
 
-	p := authctx.Principal{Kind: authctx.PrincipalUser, Subject: "user-1"}
+	p := authctx.Principal{Kind: authctx.PrincipalMachine, Subject: "key-1", Scopes: []string{"a", "b"}}
 	got, ok := authctx.PrincipalFromContext(authctx.WithPrincipal(context.Background(), p))
-	if !ok || got != p {
+	if !ok || got.Kind != p.Kind || got.Subject != p.Subject {
 		t.Fatalf("PrincipalFromContext = (%+v, %v), want (%+v, true)", got, ok, p)
+	}
+	if !got.HasScope("a") || !got.HasScope("b") || got.HasScope("c") {
+		t.Fatalf("scopes = %v, want [a b]", got.Scopes)
 	}
 }

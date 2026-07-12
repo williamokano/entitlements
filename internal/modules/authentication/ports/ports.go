@@ -86,8 +86,22 @@ type Identity struct {
 }
 
 // TokenVerifier validates an access token offline and returns its identity. The
-// auth middleware (T-014) and other modules depend on this port rather than the
-// concrete JWT verifier.
+// auth middleware and other modules depend on this port rather than the concrete
+// JWT verifier.
 type TokenVerifier interface {
 	Verify(rawAccessToken string) (Identity, error)
+}
+
+// MachineIdentity is the verified subject of an API key: the tenant it is bound
+// to and the scopes it carries.
+type MachineIdentity struct {
+	KeyID    uuid.UUID
+	TenantID uuid.UUID
+	Scopes   []string
+}
+
+// APIKeyAuthenticator validates a presented API key. The auth middleware depends
+// on this port rather than the concrete key store.
+type APIKeyAuthenticator interface {
+	AuthenticateAPIKey(ctx context.Context, rawKey string) (MachineIdentity, error)
 }

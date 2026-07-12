@@ -172,6 +172,22 @@ func TestIPHostIsNotTreatedAsSubdomain(t *testing.T) {
 	}
 }
 
+func TestPreResolvedTenantBypassesResolution(t *testing.T) {
+	// A tenant already in context (e.g. set by API-key auth) is respected; the
+	// reader is never consulted, even for a non-exempt path with no header.
+	preID := uuid.New()
+	var resolved uuid.UUID
+	h := tenant.ResolveMiddleware(newFakeReader())(probe(&resolved))
+
+	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req = req.WithContext(authctx.WithTenantID(req.Context(), preID))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || resolved != preID {
+		t.Fatalf("pre-resolved tenant: code=%d resolved=%s, want 200 %s", rec.Code, resolved, preID)
+	}
+}
+
 func TestExemptPrefixBypassesResolution(t *testing.T) {
 	var resolved uuid.UUID
 	h := tenant.ResolveMiddleware(newFakeReader(), tenant.WithExempt("/healthz", "/api/v1/tenants"))(probe(&resolved))

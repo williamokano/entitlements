@@ -72,10 +72,16 @@ func buildApplication(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger
 		example.New(deps),
 	}
 
+	// Authenticate every request from its Authorization header (permissive: no
+	// credential passes through, an invalid one is 401). A Bearer JWT sets a user
+	// principal; an API key sets a machine principal and its tenant.
+	authenticate := authMod.AuthMiddleware()
+
 	// Resolve the tenant before idempotency (so keys are scoped per tenant) and
 	// before module handlers. Health probes, the tenant-admin API, and the
 	// authentication API are exempt: managing a tenant or authenticating a global
-	// user does not happen within a tenant.
+	// user does not happen within a tenant. Resolution runs after authentication
+	// so an API-key call can supply its own tenant.
 	resolveTenant := tenant.ResolveMiddleware(tenantMod.Port(),
 		tenant.WithExempt("/healthz", "/readyz", "/api/v1/tenants", "/api/v1/auth"))
 
@@ -84,12 +90,18 @@ func buildApplication(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger
 		observability.TracingMiddleware(otel.GetTracerProvider()),
 		httpx.Recovery(logger),
 		httpx.Logging(logger),
+		authenticate,
 		resolveTenant,
 		httpx.Idempotency(pool, clk, idempotencyTTL),
 	}
 	router := httpx.NewRouter(mws...)
 	router.HandleFunc("GET /healthz", httpx.Health())
 	router.HandleFunc("GET /readyz", httpx.Health())
+
+	// Tenant-scoped API-key management: behind tenant resolution (via the chain)
+	// and RequireAuth, so only an authenticated caller within a tenant can manage
+	// that tenant's keys.
+	router.Mount("/api/v1/api-keys", authentication.RequireAuth(authMod.APIKeysHandler()))
 
 	for _, m := range modules {
 		router.Mount("/api/v1/"+m.Name(), m.Handler())

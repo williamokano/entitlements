@@ -13,7 +13,7 @@ See [`docs/PLAN.md`](docs/PLAN.md) for the architecture and
 **Milestone 1 (platform kernel) complete; Milestone 2 (identity) in progress.**
 The API boots, runs its migrations on startup, and serves real endpoints.
 
-Implemented (tasks **T-001 – T-013**):
+Implemented (tasks **T-001 – T-014**):
 
 - **Platform kernel** — config, UUIDv7 IDs, clock, Postgres pool + UnitOfWork
   (tx-in-context), migration runner, transactional outbox + relay worker,
@@ -28,14 +28,20 @@ Implemented (tasks **T-001 – T-013**):
   tokens (EdDSA, offline-verifiable) + rotating refresh tokens with
   family-reuse detection, logout, email verification, password recovery,
   password change, and session listing / revoke-others.
+- **Auth middleware + API keys** — a global middleware authenticates each
+  request: `Authorization: Bearer <jwt>` → a user principal, or
+  `Authorization: ApiKey <key>` → a machine principal (with scopes) whose tenant
+  is derived from the key. Tenant-scoped, per-tenant API keys with argon2id-hashed
+  secrets (shown once), scopes, `last_used_at`, and immediate revocation are
+  managed under `/api/v1/api-keys`.
 - **Example** module (`/api/v1/example/things`) — a reference tenant-scoped
   slice demonstrating the full hexagonal shape and the outbox → consumer flow.
 
-Not yet implemented: a **global** auth middleware and API keys (T-014 — until
-then the JWT is enforced only on the auth self-service routes; other routes are
-open and just need `X-Tenant-ID`), membership/invitations (T-015), authorization
-RBAC (T-016), and the business modules — catalog, subscription, entitlements,
-billing (Milestone 3). See [`docs/TASKS.md`](docs/TASKS.md) for the full plan.
+Not yet implemented: membership/invitations (T-015), authorization RBAC (T-016),
+and the business modules — catalog, subscription, entitlements, billing
+(Milestone 3). The auth middleware authenticates and populates the principal,
+but per-route authorization (scope/permission enforcement) arrives with T-016.
+See [`docs/TASKS.md`](docs/TASKS.md) for the full plan.
 
 ## Try it locally
 
@@ -66,6 +72,19 @@ curl -sX POST localhost:8080/api/v1/tenants \
 curl -sX POST localhost:8080/api/v1/example/things \
   -H 'content-type: application/json' -H 'X-Tenant-ID: <tenant-uuid>' \
   -d '{"name":"widget"}'
+
+# Mint a tenant API key (needs a user access token + the tenant), then use it —
+# a machine call derives its tenant from the key, so no X-Tenant-ID is needed
+curl -sX POST localhost:8080/api/v1/api-keys \
+  -H 'content-type: application/json' \
+  -H 'Authorization: Bearer <access-token>' -H 'X-Tenant-ID: <tenant-uuid>' \
+  -d '{"name":"ci","scopes":["things:write"]}'
+# → {"id":"…","prefix":"ak_…","api_key":"ak_….<secret>", …}   (secret shown once)
+
+curl -sX POST localhost:8080/api/v1/example/things \
+  -H 'content-type: application/json' \
+  -H 'Authorization: ApiKey ak_….<secret>' \
+  -d '{"name":"via-key"}'
 ```
 
 Verification and password-reset emails are **logged, not sent** by the dev
