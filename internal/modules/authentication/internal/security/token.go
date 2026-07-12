@@ -11,11 +11,13 @@ import (
 )
 
 // Claims are the access-token claims. Standard registered claims (sub, iat, exp)
-// carry identity and validity; downstream services verify these offline with
-// the published verification key.
+// carry identity and validity; sid identifies the session (refresh-token family)
+// so session management works from the access token alone. Downstream services
+// verify these offline with the published verification key.
 type Claims struct {
 	jwt.RegisteredClaims
-	Email string `json:"email,omitempty"`
+	Email     string `json:"email,omitempty"`
+	SessionID string `json:"sid,omitempty"`
 }
 
 // Signer mints signed access tokens with an EdDSA (Ed25519) key. The key id
@@ -45,9 +47,9 @@ func (s *Signer) KeyID() string { return s.kid }
 // TTL returns the access-token lifetime.
 func (s *Signer) TTL() time.Duration { return s.ttl }
 
-// Sign issues an access token for a subject, valid for the signer's ttl from
-// issuedAt.
-func (s *Signer) Sign(subject uuid.UUID, email string, issuedAt time.Time) (string, error) {
+// Sign issues an access token for a subject on a session, valid for the signer's
+// ttl from issuedAt.
+func (s *Signer) Sign(subject, sessionID uuid.UUID, email string, issuedAt time.Time) (string, error) {
 	claims := Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   subject.String(),
@@ -55,7 +57,8 @@ func (s *Signer) Sign(subject uuid.UUID, email string, issuedAt time.Time) (stri
 			IssuedAt:  jwt.NewNumericDate(issuedAt),
 			ExpiresAt: jwt.NewNumericDate(issuedAt.Add(s.ttl)),
 		},
-		Email: email,
+		Email:     email,
+		SessionID: sessionID.String(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
 	token.Header["kid"] = s.kid

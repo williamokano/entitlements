@@ -38,12 +38,24 @@ type RefreshToken struct {
 	ExpiresAt time.Time
 }
 
-// HashRefreshToken hashes a raw refresh token for storage and lookup. Refresh
-// tokens are high-entropy random strings, so a fast SHA-256 is appropriate (no
-// argon2 needed — that is for low-entropy passwords).
-func HashRefreshToken(raw string) string {
+// HashToken hashes a raw opaque token for storage and lookup. Opaque tokens
+// (refresh tokens, verification/reset tokens) are high-entropy random strings,
+// so a fast SHA-256 is appropriate — argon2 is only for low-entropy passwords.
+func HashToken(raw string) string {
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:])
+}
+
+// HashRefreshToken hashes a raw refresh token. It is HashToken specialized for
+// refresh tokens (kept for call-site clarity).
+func HashRefreshToken(raw string) string { return HashToken(raw) }
+
+// Session is an active refresh-token family: one login on one device. The head
+// (most recent, still-active) token represents the session.
+type Session struct {
+	ID        uuid.UUID // the family id
+	IssuedAt  time.Time
+	ExpiresAt time.Time
 }
 
 // RefreshRepository persists refresh tokens. Implementations route through the
@@ -54,6 +66,11 @@ type RefreshRepository interface {
 	MarkRotated(ctx context.Context, id uuid.UUID) error
 	RevokeFamily(ctx context.Context, familyID uuid.UUID) error
 	RevokeUser(ctx context.Context, userID uuid.UUID) error
+	// RevokeFamiliesExcept revokes every active family of the user except keep
+	// (used by "log out other sessions").
+	RevokeFamiliesExcept(ctx context.Context, userID, keep uuid.UUID) error
+	// ListSessions returns the user's active sessions (one per live family).
+	ListSessions(ctx context.Context, userID uuid.UUID) ([]Session, error)
 }
 
 // RefreshService issues and rotates refresh tokens over a RefreshRepository. It

@@ -19,6 +19,7 @@ import (
 	"github.com/williamokano/entitlements/internal/app"
 	"github.com/williamokano/entitlements/internal/modules/authentication"
 	"github.com/williamokano/entitlements/internal/modules/authentication/ports"
+	"github.com/williamokano/entitlements/internal/platform/audit"
 	"github.com/williamokano/entitlements/internal/platform/clock"
 	"github.com/williamokano/entitlements/internal/platform/events"
 	"github.com/williamokano/entitlements/internal/platform/id"
@@ -27,16 +28,20 @@ import (
 )
 
 func newDeps(t *testing.T) (app.Deps, *events.Bus) {
+	return newDepsWithClock(t, clock.System)
+}
+
+func newDepsWithClock(t *testing.T, clk clock.Clock) (app.Deps, *events.Bus) {
 	t.Helper()
 	pool := testkit.Postgres(t)
 	ids := id.UUIDv7{}
-	clk := clock.System
 	bus := events.NewBus()
 	deps := app.Deps{
 		Pool:       pool,
 		UnitOfWork: postgres.NewUnitOfWork(pool),
 		Outbox:     events.NewOutbox(pool, ids, clk),
 		Bus:        bus,
+		Audit:      audit.NewWriter(pool, ids, clk),
 		Logger:     slog.New(slog.NewJSONHandler(io.Discard, nil)),
 		Clock:      clk,
 		IDs:        ids,
@@ -52,6 +57,16 @@ func newModule(t *testing.T, opts ...authentication.Option) (*authentication.Mod
 		t.Fatalf("authentication.New: %v", err)
 	}
 	return mod, bus, deps
+}
+
+func newModuleWithClock(t *testing.T, clk clock.Clock, opts ...authentication.Option) (*authentication.Module, app.Deps) {
+	t.Helper()
+	deps, _ := newDepsWithClock(t, clk)
+	mod, err := authentication.New(deps, opts...)
+	if err != nil {
+		t.Fatalf("authentication.New: %v", err)
+	}
+	return mod, deps
 }
 
 func TestRegisterLoginRefreshLogoutFlow(t *testing.T) {

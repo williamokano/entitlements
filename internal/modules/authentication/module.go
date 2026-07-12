@@ -24,6 +24,7 @@ import (
 	"github.com/williamokano/entitlements/internal/modules/authentication/internal/security"
 	"github.com/williamokano/entitlements/internal/modules/authentication/internal/service"
 	"github.com/williamokano/entitlements/internal/modules/authentication/ports"
+	"github.com/williamokano/entitlements/internal/platform/apperr"
 	"github.com/williamokano/entitlements/internal/platform/config"
 )
 
@@ -37,6 +38,11 @@ type moduleConfig struct {
 	AccessTTL  time.Duration `env:"AUTH_ACCESS_TTL" envDefault:"15m"`
 	RefreshTTL time.Duration `env:"AUTH_REFRESH_TTL" envDefault:"720h"`
 
+	// Email verification and password recovery.
+	PublicBaseURL   string        `env:"AUTH_PUBLIC_BASE_URL" envDefault:"http://localhost:8080"`
+	VerificationTTL time.Duration `env:"AUTH_EMAIL_VERIFICATION_TTL" envDefault:"24h"`
+	ResetTTL        time.Duration `env:"AUTH_PASSWORD_RESET_TTL" envDefault:"1h"`
+
 	// Rate limiting for login attempts.
 	RateLimitMax    int           `env:"AUTH_LOGIN_RATE_MAX" envDefault:"10"`
 	RateLimitWindow time.Duration `env:"AUTH_LOGIN_RATE_WINDOW" envDefault:"1m"`
@@ -49,6 +55,7 @@ type Module struct {
 	handler  http.Handler
 	verifier *security.Verifier
 	limiter  ports.RateLimiter
+	sender   ports.EmailSender
 }
 
 // Option customizes the module.
@@ -58,6 +65,11 @@ type Option func(*Module)
 // a shared-store implementation, or a recording hook in tests).
 func WithRateLimiter(l ports.RateLimiter) Option {
 	return func(m *Module) { m.limiter = l }
+}
+
+// WithEmailSender overrides the default (logging) email sender.
+func WithEmailSender(s ports.EmailSender) Option {
+	return func(m *Module) { m.sender = s }
 }
 
 // New constructs the authentication module. It fails only if the environment
@@ -82,15 +94,36 @@ func New(deps app.Deps, opts ...Option) (*Module, error) {
 		deps:     deps,
 		verifier: verifier,
 		limiter:  NewMemoryRateLimiter(deps.Clock, cfg.RateLimitMax, cfg.RateLimitWindow),
+		sender:   NewLoggingEmailSender(deps.Logger),
 	}
 	for _, opt := range opts {
 		opt(m)
 	}
 
 	repo := pgadapter.New(deps.Pool)
-	m.svc = service.New(deps.UnitOfWork, deps.Outbox, repo, repo, signer, deps.IDs, deps.Clock, cfg.RefreshTTL, m.limiter)
-	m.handler = rest.New(m.svc)
+	authTokens := pgadapter.NewAuthTokens(deps.Pool)
+	m.svc = service.New(deps.UnitOfWork, deps.Outbox, repo, repo, authTokens, signer, deps.IDs, deps.Clock, service.Config{
+		Sender:          m.sender,
+		Audit:           deps.Audit,
+		BaseURL:         cfg.PublicBaseURL,
+		RefreshTTL:      cfg.RefreshTTL,
+		VerificationTTL: cfg.VerificationTTL,
+		ResetTTL:        cfg.ResetTTL,
+		Limiter:         m.limiter,
+	})
+	m.handler = rest.New(m.svc, m.authenticate)
 	return m, nil
+}
+
+// authenticate resolves the identity behind a request's bearer access token. It
+// is the module's own bearer verification, used by the self-service password and
+// session routes until the global auth middleware (T-014) lands.
+func (m *Module) authenticate(r *http.Request) (ports.Identity, error) {
+	raw, ok := rest.BearerToken(r)
+	if !ok {
+		return ports.Identity{}, apperr.Unauthorized("missing bearer token")
+	}
+	return m.Verifier().Verify(raw)
 }
 
 // Name is the module's route prefix segment.
@@ -120,7 +153,10 @@ func (t tokenVerifier) Verify(raw string) (ports.Identity, error) {
 	if err != nil {
 		return ports.Identity{}, fmt.Errorf("%w: bad subject", security.ErrInvalidToken)
 	}
-	return ports.Identity{UserID: uid, Email: claims.Email}, nil
+	// sid may be absent on very old tokens; a zero session id is harmless (it
+	// matches no family, so session operations simply keep nothing).
+	sid, _ := uuid.Parse(claims.SessionID)
+	return ports.Identity{UserID: uid, SessionID: sid, Email: claims.Email}, nil
 }
 
 // loadOrGenerateKey builds the Ed25519 signing key from a base64 seed, or
