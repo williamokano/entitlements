@@ -116,8 +116,13 @@ It owns a genuine state machine that is neither "what you get" (entitlements) no
 
 ### 6. Entitlements
 The answer to "what can this tenant do right now, and how much of it".
-- **Dynamic feature registry** (features are data, not enums): key, type (`boolean | limit | config-value | enum`), default value, description. New features are inserted, never deployed.
-- **Resolution pipeline** with explicit precedence: plan-version base grants → addon deltas → tenant overrides ⇒ *effective entitlements*. Resolved set is cached (materialized per tenant) and invalidated by subscription/catalog events.
+- **Dynamic feature registry** (features are data, not enums): `key` (the stable
+  external identifier — the analog of Stripe's `lookup_key`), type (`boolean |
+  limit | config-value | enum`), default value, description, arbitrary
+  `metadata` (JSONB, for per-feature integration data), and an `active` flag so
+  features are **archived, not deleted** — historical entitlements and audit
+  entries stay coherent. New features are inserted, never deployed.
+- **Resolution pipeline** with explicit precedence: plan-version base grants → addon deltas → tenant overrides ⇒ *effective entitlements*. Resolved set is cached (materialized per tenant) and invalidated by subscription/catalog events. Each time a tenant's effective set changes, entitlements publishes an **`EntitlementsSummaryChanged`** event carrying the full re-resolved set for that tenant — the analog of Stripe's `entitlements.active_entitlement_summary.updated`, and the feed the phase-2 webhooks module forwards to external consumers.
 - **Overrides per tenant**: manual grants/boosts (support gestures, negotiated contracts), each with optional expiry (time-bound overrides) and a reason + actor for audit.
 - Addon-driven limit extension: the "plan allows 10, pay to extend to 20" case = addon carrying `limit_delta` on a feature key.
 - **Usage tracking**: counters per (tenant, feature) with reset periods (`billing-cycle | monthly | never`), so limits are enforceable: `CheckAccess(feature)`, `ConsumeQuota(feature, n)` (atomic check-and-increment), `GetUsage`.
@@ -128,6 +133,21 @@ The answer to "what can this tenant do right now, and how much of it".
   - Feature bundles/dependencies (feature X implies Y) — model now, implement minimal.
   - Full **audit log** of entitlement changes (who/what/when/why).
   - Admin API: feature CRUD, tenant override CRUD; runtime API: get-all-entitlements (single call for frontends), check-one, consume.
+
+**Benchmark vs Stripe Billing Entitlements.** This module is a superset of
+Stripe's model. Stripe Entitlements is boolean-only (`feature` + `lookup_key`),
+derives active entitlements from catalog product-features + subscription status,
+exposes them per customer plus an `active_entitlement_summary` webhook, and does
+**no** runtime enforcement, numeric limits, or per-customer overrides (numeric
+usage lives in a separate, disconnected Meters API). We cover all of that —
+`key`≈`lookup_key`, feature `metadata`, archive-not-delete, subscription-derived
+resolution, the `EntitlementsSummaryChanged` event, get-all/check-one — and add
+what Stripe lacks in Entitlements: numeric `limit`/`config`/`enum` types, addon
+limit deltas, per-tenant overrides with expiry, soft/hard limits, downgrade
+grace, feature dependencies, and first-class runtime enforcement
+(`CheckAccess` / `ConsumeQuota`). Stripe-Meters-style aggregation of raw usage
+events (sum/count/max/unique) is the one thing we defer to the optional phase-2
+usage-metering ingestion endpoint; the enforcement path uses counters instead.
 
 ### 7. Billing
 Money side: invoices, payment execution, dunning. Never decides subscription policy — it reports outcomes as events; subscription reacts.
