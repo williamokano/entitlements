@@ -1,12 +1,16 @@
 # entitlements
 
-A reusable **Go backend skeleton for SaaS products**: a modular monolith built
-with DDD + hexagonal architecture. It ships seven modules — tenant,
-authentication, authorization, catalog, subscription, entitlements, and
-billing — so a new SaaS can start from here instead of from scratch.
+A reusable **skeleton for SaaS products**: a Go modular-monolith backend built
+with DDD + hexagonal architecture, plus a React admin frontend. It ships seven
+backend modules — tenant, authentication, authorization, catalog, subscription,
+entitlements, and billing — and an `admin/` SPA built on the Inspinia v5 design
+system, so a new SaaS can start from here instead of from scratch.
 
-See [`docs/PLAN.md`](docs/PLAN.md) for the architecture and
-[`docs/TASKS.md`](docs/TASKS.md) for the implementation task breakdown.
+See [`docs/PLAN.md`](docs/PLAN.md) for the architecture,
+[`docs/TASKS.md`](docs/TASKS.md) for the implementation task breakdown
+(backend `T` cards + frontend `F` cards), and
+[`docs/FRONTEND.md`](docs/FRONTEND.md) for the frontend design system and
+conventions.
 
 ## Status
 
@@ -61,9 +65,16 @@ Implemented (tasks **T-001 – T-019**):
 - **Example** module (`/api/v1/example/things`) — a reference tenant-scoped
   slice demonstrating the full hexagonal shape and the outbox → consumer flow.
 
+- **Frontend** (`admin/`) — the Inspinia v5 React theme (React 19 + TypeScript +
+  Vite + Tailwind 4), adopted as the project's design system. Currently the
+  vendored theme with its full demo; wiring it to the API (auth, tenants, API
+  keys, roles, catalog, subscription screens), the runtime-configurable Docker
+  image, and CI are the **F-track** tasks in
+  [`docs/TASKS.md`](docs/TASKS.md) — see [`docs/FRONTEND.md`](docs/FRONTEND.md).
+
 Not yet implemented: subscription **renewals & plan changes** (T-020/021),
-entitlements, and billing (Milestone 3). See [`docs/TASKS.md`](docs/TASKS.md) for
-the full plan.
+entitlements, and billing (Milestone 3); the frontend screens + infra
+(F-001–F-009). See [`docs/TASKS.md`](docs/TASKS.md) for the full plan.
 (Note: the tenant creator is not yet auto-assigned the `owner` role, so an
 initial role assignment currently has to be bootstrapped out of band — see the
 T-016 follow-up in the tasks doc.)
@@ -126,6 +137,21 @@ seed), so tokens do not survive a restart otherwise.
 - Docker + Docker Compose (for Postgres)
 - [`golangci-lint`](https://golangci-lint.run/) v2 (optional locally; `make
   lint` falls back to `go vet` if it is not installed)
+- Node 20+ (frontend only)
+
+### Frontend (admin/)
+
+```bash
+cd admin
+npm install
+npm run dev        # Vite dev server — currently serves the Inspinia theme demo
+```
+
+The SPA is not wired to the API yet (that's F-001 in
+[`docs/TASKS.md`](docs/TASKS.md)); today `npm run dev` serves the full theme
+demo, which doubles as the component reference for building our screens. See
+[`docs/FRONTEND.md`](docs/FRONTEND.md) for structure, runtime configuration,
+and testing conventions.
 
 ### Build and test
 

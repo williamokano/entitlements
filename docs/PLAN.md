@@ -18,6 +18,8 @@ This repository is a **reusable Go backend skeleton for SaaS products**: a modul
 | Auth tokens | JWT access (short-lived) + rotating refresh tokens | Standard; provider-agnostic |
 | Passwords | argon2id | Current best practice |
 | Background work | Minimal scheduler/worker abstraction (Postgres advisory-lock leader election) for renewals, dunning, trial expiry | No external queue dependency in the skeleton |
+| Frontend | React 19 + TypeScript + Vite SPA in `admin/`, on the **Inspinia v5** theme as design system; theme demo preserved under `/demo/*` as a component reference | Buy-not-build UI kit; every screen reuses theme components — see `docs/FRONTEND.md` |
+| Frontend config | Runtime-injected `window.__APP_CONFIG__` (`app-config.js` rendered from env by the container entrypoint): API base URL, tenant mode (header/subdomain), branding | One generic Docker image per version — deploy-time configuration, nothing baked into the bundle |
 
 ## Repository Layout
 
@@ -41,6 +43,7 @@ internal/
     entitlements/
     billing/
 migrations/                      # per-module: migrations/<module>/NNN_*.sql
+admin/                           # frontend SPA (React+Vite, Inspinia design system) — see docs/FRONTEND.md
 docs/PLAN.md                     # this document
 docker-compose.yml               # postgres for local dev
 Makefile                         # build, test, lint, sqlc gen, migrate
@@ -180,6 +183,29 @@ The transactional outbox is **part of phase 1's foundation** — only the extern
 - **Observability baseline**: `slog` structured logging with request/tenant/trace IDs, OpenTelemetry trace + metric hooks, `/healthz` + `/readyz` endpoints.
 - **Idempotency keys** on mutating HTTP endpoints (header-based), not just billing internals.
 
+## Frontend (admin SPA)
+
+Full details in [`docs/FRONTEND.md`](./FRONTEND.md); the task breakdown is the
+**F-track** in [`docs/TASKS.md`](./TASKS.md). The essentials:
+
+- **Design system**: the Inspinia v5 React theme (React 19, TS, Vite 7,
+  Tailwind 4, react-router 7, react-hook-form + yup, TanStack Table, Apex/ECharts).
+  Screens are adapted copies of theme pages under `admin/src/views/app/`; the
+  complete theme demo stays browsable under `/demo/*` (droppable from prod
+  builds) as a living component reference. Demo views are treated as vendored —
+  never edited, only copied.
+- **Backend integration**: one fetch-based API client (`src/lib/api.ts`) —
+  bearer token + transparent refresh rotation (hard logout on refresh reuse),
+  tenant header or subdomain mode mirroring `tenant.ResolveMiddleware`,
+  RFC 7807 problem+json parsed into typed errors, idempotency keys on mutations.
+- **Deployability**: a single generic Docker image (multi-stage build → nginx).
+  The entrypoint renders `app-config.js` (`window.__APP_CONFIG__`) from
+  environment variables at container start — API base URL, tenant mode,
+  branding — so the same image serves any environment or white-label domain.
+- **Definition of done**: backend tasks that add or change user-facing
+  endpoints include their screens (in-task or as a paired F-card in the same
+  PR). Frontend tests (Vitest + RTL + MSW) are contract, like backend tests.
+
 ## Phase 2 (explicitly out of scope now, but the outbox makes it cheap)
 
 - **Webhooks module**: external subscribers register endpoints per event type; signed (HMAC) delivery with retries/backoff and dead-lettering — feeds directly off the phase-1 outbox; estimated 2–3 days incremental once the outbox exists.
@@ -191,3 +217,4 @@ The transactional outbox is **part of phase 1's foundation** — only the extern
 2. **Identity core**: tenant → authentication → authorization (in that order; auth middleware ties them together).
 3. **Catalog**, then **Subscription** (state machine + scheduler), then **Entitlements** (resolution + usage), then **Billing** (invoices, fake provider, dunning).
 4. **Hardening**: idempotency, audit trails, seed/demo data, integration tests (testcontainers), example "new SaaS" checklist in README.
+5. **Frontend lane** (parallel with 3–4): F-001 foundation → F-002 Docker/infra → F-003…F-009 screens for the shipped endpoints; from T-020 on, screens ship with their backend task.
