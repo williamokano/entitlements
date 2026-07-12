@@ -336,9 +336,10 @@ must be bootstrapped out of band. Wire owner-on-create (or bridge
 - integration: `TestSecondActiveSubscriptionForTenantRejected409`.
 - integration (HTTP): `TestSubscriptionEndpointsCreateGetCancel`.
 
-### T-020 · Subscription: plan changes + addon attach/detach · **M**
+### T-020 · Subscription: plan changes + addon attach/detach · **M** · ✅ DONE (PR #24)
 **Depends on**: T-018, T-019.
 **Deliverables**: upgrade (immediate re-pin, `SubscriptionPlanChanged` with old/new refs); downgrade as scheduled change applied at period end; cancel-scheduled-change; addon attach/detach with quantity, compatibility via catalog port; `SubscriptionAddonChanged` events. Proration not computed here — events carry data for billing.
+**Note (implemented)**: upgrade-vs-downgrade is decided by comparing monthly-equivalent prices (annual ÷ 12); equal-or-higher applies immediately, lower is scheduled. `Module.ApplyScheduledChange` is the period-boundary hook T-021 calls. Frontend: covered by the F-009 card (extended in this PR).
 **Acceptance criteria**: upgrades take effect immediately; downgrades change nothing until applied; scheduled changes are visible and cancelable; incompatible addons rejected.
 **Expected tests**:
 - unit: `TestUpgradeRepinsImmediatelyAndEmitsOldNewRefs`.
@@ -548,11 +549,11 @@ paired F-card).
 **Endpoints**: the full catalog surface (`/api/v1/catalog/plans...`, `/versions/{vid}`, `/public`, `/addons...`, `/addon-versions/{vid}`).
 **Expected tests** (MSW): editor fields disabled for a published version; publish requires the confirm; pricing preview renders public plans; addon delta rows validate feature keys and integer amounts (minor units — no floats anywhere in the UI layer either).
 
-### F-009 · Subscription screen · **M** *(backend: T-019 — merged)*
+### F-009 · Subscription screen · **M** *(backend: T-019, T-020 — merged)*
 **Depends on**: F-001, F-008 (reuses the plan/pricing picker components).
-**Screens**: a "Billing → Subscription" page: current-subscription card (status chip per state, current period, trial countdown, cancel-at-period-end banner); when none, a subscribe flow (public plan + billing-cycle picker); lifecycle actions **rendered from the state machine** so only legal actions show (cancel immediate/at-period-end modal, pause, resume, reactivate).
-**Endpoints**: `POST|GET /api/v1/subscription`, `POST /api/v1/subscription/{cancel,pause,resume,reactivate}`.
-**Expected tests** (MSW): active shows pause+cancel and not resume; paused shows resume; the cancel modal posts `immediate` true/false correctly; a 409 renders a conflict toast; the empty state shows the plan picker.
+**Screens**: a "Billing → Subscription" page: current-subscription card (status chip per state, current period, trial countdown, cancel-at-period-end banner); when none, a subscribe flow (public plan + billing-cycle picker); lifecycle actions **rendered from the state machine** so only legal actions show (cancel immediate/at-period-end modal, pause, resume, reactivate). Plus (T-020): a **change-plan flow** (pick plan+cycle; on response show either the new pin or a "scheduled for period end" banner with a cancel-change button) and an **addons section** (attached addons with quantity steppers, attach from compatible published addons, detach with confirm).
+**Endpoints**: `POST|GET /api/v1/subscription`, `POST /api/v1/subscription/{cancel,pause,resume,reactivate,change-plan}`, `POST /api/v1/subscription/scheduled-change/cancel`, `POST /api/v1/subscription/addons`, `DELETE /api/v1/subscription/addons/{vid}`.
+**Expected tests** (MSW): active shows pause+cancel and not resume; paused shows resume; the cancel modal posts `immediate` true/false correctly; a 409 renders a conflict toast; the empty state shows the plan picker; a downgrade response renders the scheduled-change banner and its cancel button calls the endpoint; addon attach validates quantity and a 400 (incompatible) renders inline.
 
 ---
 

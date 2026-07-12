@@ -18,7 +18,7 @@ conventions.
 core) in progress.** The API boots, runs its migrations on startup, and serves
 real endpoints.
 
-Implemented (tasks **T-001 – T-019**):
+Implemented (tasks **T-001 – T-020**):
 
 - **Platform kernel** — config, UUIDv7 IDs, clock, Postgres pool + UnitOfWork
   (tx-in-context), migration runner, transactional outbox + relay worker,
@@ -62,6 +62,11 @@ Implemented (tasks **T-001 – T-019**):
   expired`); one live subscription per tenant, guarded transitions with a full
   history trail and an event per transition, trial/period tracking, and
   create / cancel (immediate or at period end) / reactivate / pause / resume.
+  Also **plan changes** — upgrades (equal-or-higher monthly-equivalent price)
+  re-pin immediately, downgrades become a visible, cancelable **scheduled
+  change** applied at the period boundary — and **addon attach/detach** with
+  quantities, plan-compatibility enforcement, and `plan_changed` /
+  `addon_changed` events carrying the data billing will need for proration.
 - **Example** module (`/api/v1/example/things`) — a reference tenant-scoped
   slice demonstrating the full hexagonal shape and the outbox → consumer flow.
 
@@ -72,9 +77,9 @@ Implemented (tasks **T-001 – T-019**):
   image, and CI are the **F-track** tasks in
   [`docs/TASKS.md`](docs/TASKS.md) — see [`docs/FRONTEND.md`](docs/FRONTEND.md).
 
-Not yet implemented: subscription **renewals & plan changes** (T-020/021),
-entitlements, and billing (Milestone 3); the frontend screens + infra
-(F-001–F-009). See [`docs/TASKS.md`](docs/TASKS.md) for the full plan.
+Not yet implemented: subscription **renewals** (T-021), entitlements, and
+billing (Milestone 3); the frontend screens + infra (F-001–F-009). See
+[`docs/TASKS.md`](docs/TASKS.md) for the full plan.
 (Note: the tenant creator is not yet auto-assigned the `owner` role, so an
 initial role assignment currently has to be bootstrapped out of band — see the
 T-016 follow-up in the tasks doc.)

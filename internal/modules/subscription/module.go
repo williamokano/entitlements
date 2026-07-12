@@ -3,7 +3,10 @@
 package subscription
 
 import (
+	"context"
 	"net/http"
+
+	"github.com/google/uuid"
 
 	"github.com/williamokano/entitlements/internal/app"
 	pgadapter "github.com/williamokano/entitlements/internal/modules/subscription/internal/adapters/postgres"
@@ -22,9 +25,16 @@ type Module struct {
 
 // New constructs the subscription module. catalog is the slice of the catalog it
 // reads (the catalog module's port satisfies it).
-func New(deps app.Deps, catalog service.PlanVersionReader) *Module {
+func New(deps app.Deps, catalog service.CatalogReader) *Module {
 	svc := service.New(deps.UnitOfWork, deps.Outbox, pgadapter.New(deps.Pool), catalog, deps.IDs, deps.Clock)
 	return &Module{deps: deps, svc: svc, handler: rest.New(svc)}
+}
+
+// ApplyScheduledChange applies a subscription's scheduled plan change (no-op if
+// none is pending). It is the period-boundary hook the renewal job (T-021)
+// invokes at rollover.
+func (m *Module) ApplyScheduledChange(ctx context.Context, subscriptionID uuid.UUID) error {
+	return m.svc.ApplyScheduledChange(ctx, subscriptionID)
 }
 
 // Name is the module's route prefix segment.
