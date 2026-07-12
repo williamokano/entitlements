@@ -38,10 +38,22 @@ const (
 )
 
 // Principal is the authenticated caller. It is populated by the authentication
-// middleware (T-012/T-014); Subject is the user or API-key ID.
+// middleware (T-012/T-014); Subject is the user or API-key ID. Scopes carries an
+// API key's scopes (empty for user principals).
 type Principal struct {
 	Kind    PrincipalKind
 	Subject string
+	Scopes  []string
+}
+
+// HasScope reports whether the principal carries the given scope.
+func (p Principal) HasScope(scope string) bool {
+	for _, s := range p.Scopes {
+		if s == scope {
+			return true
+		}
+	}
+	return false
 }
 
 // WithTenantID stores the resolved tenant ID in the context.

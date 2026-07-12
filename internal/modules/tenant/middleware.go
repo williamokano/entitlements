@@ -53,6 +53,12 @@ func ResolveMiddleware(reader ports.TenantReader, opts ...ResolveOption) httpx.M
 				next.ServeHTTP(w, r)
 				return
 			}
+			// A tenant may already be resolved upstream — e.g. API-key auth binds
+			// the request to the key's tenant. Respect it and skip resolution.
+			if id, ok := authctx.TenantID(ctx); ok && id != uuid.Nil {
+				next.ServeHTTP(w, r)
+				return
+			}
 
 			info, err := resolveTenant(ctx, r, reader)
 			if err != nil {

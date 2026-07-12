@@ -289,3 +289,108 @@ func (r *AuthTokens) Consume(ctx context.Context, id uuid.UUID, consumedAt time.
 	}
 	return nil
 }
+
+// APIKeys is a Postgres-backed domain.APIKeyRepository.
+type APIKeys struct {
+	pool *pgxpool.Pool
+}
+
+// NewAPIKeys builds an APIKeys repository.
+func NewAPIKeys(pool *pgxpool.Pool) *APIKeys { return &APIKeys{pool: pool} }
+
+// Insert stores a new API key.
+func (r *APIKeys) Insert(ctx context.Context, k *domain.APIKey) error {
+	_, err := platformpg.Q(ctx, r.pool).Exec(ctx,
+		`INSERT INTO authn.api_keys (id, tenant_id, name, prefix, secret_hash, scopes, last_used_at, revoked_at, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		k.ID, k.TenantID, k.Name, k.Prefix, k.SecretHash, k.Scopes, k.LastUsedAt, k.RevokedAt, k.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("authn: insert api key: %w", err)
+	}
+	return nil
+}
+
+// GetByPrefix returns an API key by its public prefix (revoked or not — the
+// caller decides how to treat a revoked key).
+func (r *APIKeys) GetByPrefix(ctx context.Context, prefix string) (*domain.APIKey, error) {
+	k, err := r.scanOne(ctx, `WHERE prefix = $1`, prefix)
+	if err != nil {
+		return nil, err
+	}
+	return k, nil
+}
+
+// ListByTenant returns a tenant's non-revoked API keys, newest first.
+func (r *APIKeys) ListByTenant(ctx context.Context, tenantID uuid.UUID) ([]*domain.APIKey, error) {
+	rows, err := platformpg.Q(ctx, r.pool).Query(ctx,
+		`SELECT id, tenant_id, name, prefix, secret_hash, scopes, last_used_at, revoked_at, created_at
+		 FROM authn.api_keys WHERE tenant_id = $1 AND revoked_at IS NULL ORDER BY created_at DESC`, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("authn: list api keys: %w", err)
+	}
+	defer rows.Close()
+
+	var keys []*domain.APIKey
+	for rows.Next() {
+		k, err := scanKey(rows)
+		if err != nil {
+			return nil, err
+		}
+		keys = append(keys, k)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("authn: iterate api keys: %w", err)
+	}
+	return keys, nil
+}
+
+// Revoke marks a tenant's API key revoked. It is scoped by tenant so one tenant
+// cannot revoke another's key.
+func (r *APIKeys) Revoke(ctx context.Context, id, tenantID uuid.UUID, at time.Time) error {
+	tag, err := platformpg.Q(ctx, r.pool).Exec(ctx,
+		`UPDATE authn.api_keys SET revoked_at = $3 WHERE id = $1 AND tenant_id = $2 AND revoked_at IS NULL`,
+		id, tenantID, at)
+	if err != nil {
+		return fmt.Errorf("authn: revoke api key: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return apperr.NotFound("api key not found")
+	}
+	return nil
+}
+
+// TouchLastUsed records the most recent use of a key (best-effort telemetry).
+func (r *APIKeys) TouchLastUsed(ctx context.Context, id uuid.UUID, at time.Time) error {
+	_, err := platformpg.Q(ctx, r.pool).Exec(ctx,
+		`UPDATE authn.api_keys SET last_used_at = $2 WHERE id = $1`, id, at)
+	if err != nil {
+		return fmt.Errorf("authn: touch api key: %w", err)
+	}
+	return nil
+}
+
+func (r *APIKeys) scanOne(ctx context.Context, where string, args ...any) (*domain.APIKey, error) {
+	rows, err := platformpg.Q(ctx, r.pool).Query(ctx,
+		`SELECT id, tenant_id, name, prefix, secret_hash, scopes, last_used_at, revoked_at, created_at
+		 FROM authn.api_keys `+where, args...)
+	if err != nil {
+		return nil, fmt.Errorf("authn: query api key: %w", err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("authn: query api key: %w", err)
+		}
+		return nil, apperr.NotFound("api key not found")
+	}
+	return scanKey(rows)
+}
+
+func scanKey(rows pgx.Rows) (*domain.APIKey, error) {
+	var k domain.APIKey
+	if err := rows.Scan(&k.ID, &k.TenantID, &k.Name, &k.Prefix, &k.SecretHash, &k.Scopes,
+		&k.LastUsedAt, &k.RevokedAt, &k.CreatedAt); err != nil {
+		return nil, fmt.Errorf("authn: scan api key: %w", err)
+	}
+	return &k, nil
+}

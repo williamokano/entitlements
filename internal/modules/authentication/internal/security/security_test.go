@@ -48,6 +48,45 @@ func TestArgon2idHashVerifyAndRejectsWrongPassword(t *testing.T) {
 	}
 }
 
+func TestGenerateAndParseAPIKey(t *testing.T) {
+	m, err := security.GenerateAPIKey()
+	if err != nil {
+		t.Fatalf("GenerateAPIKey: %v", err)
+	}
+	if m.Full != m.Prefix+"."+m.Secret {
+		t.Fatalf("Full = %q, want prefix.secret", m.Full)
+	}
+	if !strings.HasPrefix(m.Prefix, "ak_") {
+		t.Fatalf("prefix = %q, want ak_ prefix", m.Prefix)
+	}
+
+	// Two keys differ in both prefix and secret.
+	m2, _ := security.GenerateAPIKey()
+	if m.Prefix == m2.Prefix || m.Secret == m2.Secret {
+		t.Fatal("two generated keys collide")
+	}
+
+	// Round-trip parse.
+	prefix, secret, ok := security.ParseAPIKey(m.Full)
+	if !ok || prefix != m.Prefix || secret != m.Secret {
+		t.Fatalf("ParseAPIKey = (%q, %q, %v), want (%q, %q, true)", prefix, secret, ok, m.Prefix, m.Secret)
+	}
+
+	// Malformed inputs are rejected.
+	for _, bad := range []string{"", "no-separator", ".", "prefix.", ".secret"} {
+		if _, _, ok := security.ParseAPIKey(bad); ok {
+			t.Errorf("ParseAPIKey(%q) ok = true, want false", bad)
+		}
+	}
+
+	// The secret verifies against its argon2id hash (keys are hashed like
+	// passwords at rest).
+	hash, _ := security.HashPassword(m.Secret)
+	if ok, _ := security.VerifyPassword(m.Secret, hash); !ok {
+		t.Fatal("api key secret failed to verify against its hash")
+	}
+}
+
 func TestJWTSignedWithKidAndVerifies(t *testing.T) {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
