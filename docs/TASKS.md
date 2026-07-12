@@ -355,9 +355,10 @@ graph TD
 
 ### T-022 · Entitlements: feature registry + resolution pipeline · **L** ← core of the product
 **Depends on**: T-017, T-019. **Spec**: PLAN.md §6.
-**Deliverables**: feature registry CRUD (`key`, `type: boolean|limit|config|enum`, default, description, `limit_behavior: soft|hard`, `reset_period`); resolution pipeline plan grants → addon deltas (×quantity) → tenant overrides ⇒ effective set; materialized `effective_entitlements` rebuilt by idempotent consumers of subscription/catalog/override events; unknown-feature policy (`default_deny|default_allow`) from config; runtime REST `GET /entitlements`, `GET /entitlements/{key}`; `ports.EntitlementsReader.Get`.
+**Deliverables**: feature registry CRUD (`key` — the stable external identifier, the analog of Stripe's `lookup_key`; `type: boolean|limit|config|enum`, default, description, `limit_behavior: soft|hard`, `reset_period`, arbitrary `metadata` JSONB, and an `active` flag so features are **archived, not deleted**); resolution pipeline plan grants → addon deltas (×quantity) → tenant overrides ⇒ effective set; materialized `effective_entitlements` rebuilt by idempotent consumers of subscription/catalog/override events; on every change to a tenant's effective set, publish `EntitlementsSummaryChanged` carrying the full re-resolved set (the analog of Stripe's `active_entitlement_summary.updated`, and the phase-2 webhook feed); unknown-feature policy (`default_deny|default_allow`) from config; runtime REST `GET /entitlements`, `GET /entitlements/{key}`; `ports.EntitlementsReader.Get`.
 **Out of scope**: overrides CRUD (T-023), usage/consume (T-024).
-**Acceptance criteria**: precedence is exactly plan < addon < override; the canonical "plan 10 + addon 10 ⇒ 20" case holds; materialization converges after any relevant event; unknown keys resolve per policy.
+**Acceptance criteria**: precedence is exactly plan < addon < override; the canonical "plan 10 + addon 10 ⇒ 20" case holds; materialization converges after any relevant event; unknown keys resolve per policy; archived features stop granting but keep existing rows/audit coherent; a change to a tenant's effective set emits exactly one `EntitlementsSummaryChanged` with the full set.
+**Stripe parity note**: `key`≈`lookup_key`, feature `metadata`, archive-not-delete, and the summary event bring the module to full parity with Stripe Billing Entitlements; the numeric/limit/override capabilities below are beyond what Stripe Entitlements offers (see PLAN.md §6 benchmark).
 **Expected tests**:
 - unit: `TestResolutionPrecedenceTable` — table-driven: plan only; plan+addon; plan+override; all three (override wins); boolean/config/enum types.
 - unit: `TestAddonLimitDeltaTimesQuantity` — the 10 + (addon ×1, ×2) cases; **explicitly asserts 10→20**.
@@ -366,6 +367,8 @@ graph TD
 - integration: `TestMaterializedSetRebuiltOnSubscriptionPlanChanged` — event → new effective values readable.
 - integration: `TestMaterializationIdempotentUnderDuplicateEvents`.
 - integration: `TestFeatureRegistryCRUDNewFeatureNeedsNoDeploy` — insert feature row → appears in resolution with default.
+- integration: `TestArchivedFeatureStopsGrantingButKeepsHistory` — archived (`active=false`) feature drops out of resolution; existing effective rows/audit remain.
+- integration: `TestEntitlementsSummaryChangedEmittedOnEffectiveSetChange` — a relevant event → exactly one `EntitlementsSummaryChanged` carrying the full re-resolved set; no-op change emits nothing.
 - integration (HTTP): `TestGetAllEntitlementsSingleCall` + `TestGetSingleEntitlement`.
 
 ### T-023 · Entitlements: tenant overrides + audit · **M**
