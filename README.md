@@ -89,9 +89,15 @@ Implemented (tasks **T-001 – T-021**):
   subscription) are placeholder pages until their **F-track** cards land — see
   [`docs/FRONTEND.md`](docs/FRONTEND.md).
 
-Not yet implemented: entitlements and
-billing (Milestone 3); the frontend module screens + Docker image
-(F-002–F-009). See [`docs/TASKS.md`](docs/TASKS.md) for the full plan.
+The admin SPA also ships as a **generic Docker image** (F-002): one image built
+once, configured entirely at container start via environment variables (API URL,
+tenant mode, branding, demo toggle) — see *Running the admin SPA in Docker*
+below. `docker compose up` now brings up Postgres, the API, and the SPA together.
+
+Not yet implemented: entitlements and billing (Milestone 3); the remaining
+frontend module screens (auth suite, tenants, members, roles, catalog,
+subscription — F-003–F-005, F-007–F-009). See [`docs/TASKS.md`](docs/TASKS.md)
+for the full plan.
 (Note: the tenant creator is not yet auto-assigned the `owner` role, so an
 initial role assignment currently has to be bootstrapped out of band — see the
 T-016 follow-up in the tasks doc.)
@@ -99,9 +105,12 @@ T-016 follow-up in the tasks doc.)
 ## Try it locally
 
 ```bash
-docker compose up -d          # Postgres on :5432 (credentials match the app default)
+docker compose up -d postgres # Postgres on :5432 (credentials match the app default)
 make run                      # applies migrations on startup, serves on :8080
 ```
+
+(Or run the whole stack in containers — Postgres + API + SPA — with
+`docker compose up`; see *Running the admin SPA in Docker* below.)
 
 ```bash
 # Health
@@ -176,10 +185,49 @@ browsable under `/demo` and doubles as the component reference for building
 our screens. See [`docs/FRONTEND.md`](docs/FRONTEND.md) for structure, runtime
 configuration, and testing conventions.
 
+### Running the admin SPA in Docker
+
+The SPA builds into **one generic image** — nothing environment-specific is
+baked into the JS bundle. Build it once, then point it at any backend by setting
+environment variables at container start; an entrypoint renders
+`app-config.js` from them (via `envsubst`) before nginx boots.
+
+```bash
+# Build once (add --build-arg VITE_ENABLE_DEMO=true to keep the /demo bundle)
+docker build -t entitlements-admin ./admin
+
+# Run, injecting configuration for this environment
+docker run -d -p 3000:80 \
+  -e API_BASE_URL=https://api.example.com \
+  -e TENANT_MODE=header \
+  -e APP_NAME="Entitlements" \
+  entitlements-admin
+# → http://localhost:3000  (deep links work via SPA history fallback)
+```
+
+Recognised variables (all optional; defaults shown):
+
+| Variable        | Default                 | Purpose                                    |
+| --------------- | ----------------------- | ------------------------------------------ |
+| `API_BASE_URL`  | `http://localhost:8080` | Origin of the Go API                       |
+| `TENANT_MODE`   | `header`                | `header` or `subdomain` tenant resolution  |
+| `TENANT_SLUG`   | *(empty)*               | Fixed tenant (header mode)                 |
+| `APP_NAME`      | `Entitlements`          | Branding / page title                      |
+| `ENABLE_DEMO`   | `false`                 | Expose the vendored Inspinia demo          |
+
+For **subdomain** tenant mode the SPA is served on `*.example.com` and the
+backend resolves the tenant from the `Host` header; point wildcard DNS (or
+`/etc/hosts` entries like `acme.localhost`) at the container.
+
+Or bring up the whole stack (Postgres + API + SPA) with `docker compose up`
+(SPA on `:3000`, API on `:8080`). The published image is available on GHCR as
+`ghcr.io/williamokano/entitlements/admin` (pushed on `main`, tagged `latest` +
+commit `sha`).
+
 ### Build and test
 
 ```bash
-docker compose up -d          # Postgres (integration tests + local run)
+docker compose up -d postgres # Postgres (integration tests + local run)
 make build
 make lint
 make test                     # unit tests, race detector

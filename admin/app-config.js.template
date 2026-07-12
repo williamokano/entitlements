@@ -1,0 +1,10 @@
+// Runtime configuration — regenerated at container start from environment
+// variables by docker-entrypoint.sh (envsubst). The same built image therefore
+// serves any environment; nothing here is baked into the JS bundle.
+window.__APP_CONFIG__ = {
+  apiBaseUrl: '${API_BASE_URL}',
+  tenantMode: '${TENANT_MODE}',
+  tenantSlug: '${TENANT_SLUG}',
+  appName: '${APP_NAME}',
+  enableDemo: ${ENABLE_DEMO},
+}

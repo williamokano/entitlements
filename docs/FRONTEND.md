@@ -101,9 +101,12 @@ never baked into the JS bundle.
 
 - `index.html` loads it before the bundle; `src/lib/config.ts` exposes a typed
   `appConfig()` accessor with dev fallbacks from `import.meta.env` (`VITE_API_BASE_URL`, …).
-- The Docker entrypoint regenerates `app-config.js` from environment variables
-  (`API_BASE_URL`, `TENANT_MODE`, `TENANT_SLUG`, `APP_NAME`, …) via a template +
-  `envsubst`, then starts nginx. Same image → any environment.
+- The Docker entrypoint (`admin/docker-entrypoint.sh`) regenerates
+  `app-config.js` from environment variables (`API_BASE_URL`, `TENANT_MODE`,
+  `TENANT_SLUG`, `APP_NAME`, `ENABLE_DEMO`) by rendering
+  `admin/app-config.js.template` with `envsubst` (built into `nginx:alpine`),
+  then `exec`s nginx. Same image → any environment (see the README's *Running
+  the admin SPA in Docker* for the variable table and defaults).
 - **Tenant mode** mirrors the backend's `tenant.ResolveMiddleware`:
   - `subdomain`: the SPA is served on `*.example.com`; the backend resolves the
     tenant from the Host header — the client sends requests to the same origin
