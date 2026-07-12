@@ -43,6 +43,11 @@ type Config struct {
 	MigrationDatabaseURL string `env:"MIGRATION_DATABASE_URL"`
 	LogLevel             string `env:"LOG_LEVEL" envDefault:"info"`
 
+	// CORSAllowedOrigins lists the browser origins allowed to call the API
+	// cross-origin (the admin SPA runs on a different origin than the API). Use
+	// "*" to allow any origin. Comma-separated in the environment.
+	CORSAllowedOrigins []string `env:"CORS_ALLOWED_ORIGINS" envSeparator:"," envDefault:"http://localhost:3000"`
+
 	// Observability. OTLPEndpoint is the OTLP/HTTP collector URL; when empty,
 	// tracing/metrics are created but not exported (no-op).
 	ServiceName  string `env:"OTEL_SERVICE_NAME" envDefault:"entitlements"`
