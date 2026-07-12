@@ -83,9 +83,11 @@ Implemented (tasks **T-001 – T-021**):
   `public/app-config.js` (`window.__APP_CONFIG__`: API base URL, tenant mode,
   branding) so a built bundle switches backends without a rebuild. The full
   Inspinia theme demo stays browsable under `/demo/*` (droppable from prod
-  builds via `VITE_ENABLE_DEMO=false`). Module screens (auth suite, tenants,
-  members, API keys, roles, catalog, subscription) are placeholder pages until
-  their **F-track** cards land — see [`docs/FRONTEND.md`](docs/FRONTEND.md).
+  builds via `VITE_ENABLE_DEMO=false`). The **API keys** screen is live
+  (`/api-keys`: list, create with a one-time secret reveal, revoke — F-006);
+  the remaining module screens (auth suite, tenants, members, roles, catalog,
+  subscription) are placeholder pages until their **F-track** cards land — see
+  [`docs/FRONTEND.md`](docs/FRONTEND.md).
 
 Not yet implemented: entitlements and
 billing (Milestone 3); the frontend module screens + Docker image
