@@ -19,11 +19,12 @@ import (
 	"github.com/williamokano/entitlements/internal/platform/postgres"
 )
 
-// PlanVersionReader is the slice of the catalog the subscription service needs:
-// reading the pinned plan version's config. The catalog module's CatalogReader
-// satisfies it.
-type PlanVersionReader interface {
+// CatalogReader is the slice of the catalog the subscription service needs:
+// reading pinned plan versions and addon versions. The catalog module's
+// CatalogReader satisfies it.
+type CatalogReader interface {
 	GetPlanVersion(ctx context.Context, id uuid.UUID) (catalogports.PlanVersionInfo, error)
+	GetAddonVersion(ctx context.Context, id uuid.UUID) (catalogports.AddonVersionInfo, error)
 }
 
 // Service implements the subscription use cases and ports.SubscriptionReader.
@@ -31,14 +32,26 @@ type Service struct {
 	uow     *postgres.UnitOfWork
 	outbox  *events.Outbox
 	repo    domain.Repository
-	catalog PlanVersionReader
+	catalog CatalogReader
 	ids     id.Generator
 	clk     clock.Clock
 }
 
 // New builds a Service.
-func New(uow *postgres.UnitOfWork, outbox *events.Outbox, repo domain.Repository, catalog PlanVersionReader, ids id.Generator, clk clock.Clock) *Service {
+func New(uow *postgres.UnitOfWork, outbox *events.Outbox, repo domain.Repository, catalog CatalogReader, ids id.Generator, clk clock.Clock) *Service {
 	return &Service{uow: uow, outbox: outbox, repo: repo, catalog: catalog, ids: ids, clk: clk}
+}
+
+// ScheduledChangeView is the read model of a pending plan change.
+type ScheduledChangeView struct {
+	PlanVersionID uuid.UUID
+	BillingCycle  string
+}
+
+// AddonView is the read model of an attached addon.
+type AddonView struct {
+	AddonVersionID uuid.UUID
+	Quantity       int
 }
 
 // View is a read model of a subscription.
@@ -51,6 +64,8 @@ type View struct {
 	CurrentPeriodEnd   string
 	TrialEndsAt        string
 	CancelAtPeriodEnd  bool
+	ScheduledChange    *ScheduledChangeView
+	Addons             []AddonView
 }
 
 // Create starts a subscription for the current tenant against a pinned plan
@@ -94,7 +109,8 @@ func (s *Service) Create(ctx context.Context, planVersionID uuid.UUID, cycle str
 	return toView(sub), nil
 }
 
-// GetForTenant returns the current tenant's live subscription.
+// GetForTenant returns the current tenant's live subscription, including its
+// attached addons.
 func (s *Service) GetForTenant(ctx context.Context) (View, error) {
 	tenantID, err := authctx.MustTenant(ctx)
 	if err != nil {
@@ -104,7 +120,15 @@ func (s *Service) GetForTenant(ctx context.Context) (View, error) {
 	if err != nil {
 		return View{}, err
 	}
-	return toView(sub), nil
+	addons, err := s.repo.ListAddons(ctx, sub.ID)
+	if err != nil {
+		return View{}, err
+	}
+	view := toView(sub)
+	for _, a := range addons {
+		view.Addons = append(view.Addons, AddonView{AddonVersionID: a.AddonVersionID, Quantity: a.Quantity})
+	}
+	return view, nil
 }
 
 // Cancel cancels the current tenant's live subscription, immediately or at the
@@ -242,6 +266,10 @@ func toView(sub *domain.Subscription) View {
 	if sub.TrialEndsAt != nil {
 		trial = sub.TrialEndsAt.UTC().Format("2006-01-02T15:04:05Z07:00")
 	}
+	var scheduled *ScheduledChangeView
+	if sub.Scheduled != nil {
+		scheduled = &ScheduledChangeView{PlanVersionID: sub.Scheduled.PlanVersionID, BillingCycle: string(sub.Scheduled.BillingCycle)}
+	}
 	return View{
 		ID:                 sub.ID,
 		PlanVersionID:      sub.PlanVersionID,
@@ -251,5 +279,6 @@ func toView(sub *domain.Subscription) View {
 		CurrentPeriodEnd:   sub.CurrentPeriodEnd.UTC().Format("2006-01-02T15:04:05Z07:00"),
 		TrialEndsAt:        trial,
 		CancelAtPeriodEnd:  sub.CancelAtPeriodEnd,
+		ScheduledChange:    scheduled,
 	}
 }

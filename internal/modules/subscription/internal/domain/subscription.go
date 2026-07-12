@@ -134,12 +134,16 @@ type Subscription struct {
 	CurrentPeriodEnd   time.Time
 	TrialEndsAt        *time.Time
 	CancelAtPeriodEnd  bool
+	Scheduled          *ScheduledChange
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 
 	// pending is the transition produced by the last Create/Apply call, to be
 	// persisted and published by the service. It is not part of the stored state.
 	pending *Transition
+	// pendingChange is the plan change produced by the last
+	// ChangePlanNow/ApplyScheduledChange call, for the service to publish.
+	pendingChange *PlanChange
 }
 
 // Create builds a subscription in its initial state. When trialDays > 0 it
@@ -229,7 +233,7 @@ func periodEnd(start time.Time, cycle BillingCycle) time.Time {
 	}
 }
 
-// Repository persists subscriptions and their transitions.
+// Repository persists subscriptions, their transitions, and their addons.
 type Repository interface {
 	Create(ctx context.Context, s *Subscription) error
 	Update(ctx context.Context, s *Subscription) error
@@ -237,4 +241,5 @@ type Repository interface {
 	GetLiveForTenant(ctx context.Context, tenantID uuid.UUID) (*Subscription, error)
 	AppendTransition(ctx context.Context, t *Transition) error
 	ListTransitions(ctx context.Context, subscriptionID uuid.UUID) ([]*Transition, error)
+	AddonRepository
 }
