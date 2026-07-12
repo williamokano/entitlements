@@ -306,7 +306,7 @@ must be bootstrapped out of band. Wire owner-on-create (or bridge
 - integration: `TestGetPlanVersionPortReturnsFrozenSnapshot`.
 - integration: `TestPlanVersionPublishedEventEmitted`.
 
-### T-018 · Catalog: addons · **M**
+### T-018 · Catalog: addons · **M** · ✅ DONE (PR #21)
 **Depends on**: T-017. **Spec**: PLAN.md §4.
 **Deliverables**: `Addon` with own pricing per cycle, compatible-plan list, entitlement deltas (`feature_key → limit_delta | value override`), quantity-allowed flag; versioned like plans; REST CRUD; exposed via `ports.CatalogReader`; compatibility helper other modules reuse.
 **Acceptance criteria**: addons declare compatibility and deltas; incompatible pairings are rejected by the shared helper; addon versions immutable once published.

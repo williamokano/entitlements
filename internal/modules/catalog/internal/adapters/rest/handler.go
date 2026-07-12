@@ -31,6 +31,7 @@ func New(svc *service.Service) http.Handler {
 	mux.HandleFunc("POST /plans/{id}/versions/{vid}/publish", publishVersion(svc))
 	mux.HandleFunc("GET /versions/{vid}", getVersion(svc))
 	mux.HandleFunc("GET /public", listPublic(svc))
+	registerAddons(mux, svc)
 	return mux
 }
 

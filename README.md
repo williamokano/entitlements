@@ -14,7 +14,7 @@ See [`docs/PLAN.md`](docs/PLAN.md) for the architecture and
 core) in progress.** The API boots, runs its migrations on startup, and serves
 real endpoints.
 
-Implemented (tasks **T-001 – T-017**):
+Implemented (tasks **T-001 – T-018**):
 
 - **Platform kernel** — config, UUIDv7 IDs, clock, Postgres pool + UnitOfWork
   (tx-in-context), migration runner, transactional outbox + relay worker,
@@ -47,11 +47,15 @@ Implemented (tasks **T-001 – T-017**):
   (global, not tenant-scoped): plans with immutable published **versions**
   (publishing freezes a version so existing subscribers are never affected by
   later changes), per-cycle pricing in integer minor units, trial/grace config,
-  and free-form feature grants. Admin CRUD + an open public plan listing.
+  and free-form feature grants. Admin CRUD + an open public plan listing. Also
+  **addons** — versioned like plans (immutable once published), with their own
+  pricing, a compatible-plan list (a shared compatibility helper other modules
+  reuse), a quantity-allowed flag, and entitlement **deltas**
+  (`feature_key → limit delta | value override`).
 - **Example** module (`/api/v1/example/things`) — a reference tenant-scoped
   slice demonstrating the full hexagonal shape and the outbox → consumer flow.
 
-Not yet implemented: the remaining business modules — addons, subscription,
+Not yet implemented: the remaining business modules — subscription,
 entitlements, billing (Milestone 3). See [`docs/TASKS.md`](docs/TASKS.md) for the
 full plan.
 (Note: the tenant creator is not yet auto-assigned the `owner` role, so an

@@ -119,11 +119,27 @@ func (v *PlanVersion) Publish(now time.Time) error {
 }
 
 func validateContent(currency string, prices []Price, trial TrialConfig, graceDays int) error {
+	if err := ValidateCurrencyAndPrices(currency, prices); err != nil {
+		return err
+	}
+	if graceDays < 0 {
+		return apperr.Validation("grace days must not be negative")
+	}
+	if trial.Enabled && trial.Days <= 0 {
+		return apperr.Validation("trial days must be positive when the trial is enabled")
+	}
+	return nil
+}
+
+// ValidateCurrencyAndPrices checks a currency code and a set of per-cycle prices
+// (integer minor units, no duplicate cycles, non-negative). Shared by plan and
+// addon versions.
+func ValidateCurrencyAndPrices(currency string, prices []Price) error {
 	if !currencyPattern.MatchString(currency) {
 		return apperr.Validation("currency must be a 3-letter ISO code (e.g. USD)")
 	}
 	if len(prices) == 0 {
-		return apperr.Validation("a plan version needs at least one price")
+		return apperr.Validation("at least one price is required")
 	}
 	seen := map[BillingCycle]bool{}
 	for _, p := range prices {
@@ -137,12 +153,6 @@ func validateContent(currency string, prices []Price, trial TrialConfig, graceDa
 		if p.AmountMinor < 0 {
 			return apperr.Validation("price amount (minor units) must not be negative")
 		}
-	}
-	if graceDays < 0 {
-		return apperr.Validation("grace days must not be negative")
-	}
-	if trial.Enabled && trial.Days <= 0 {
-		return apperr.Validation("trial days must be positive when the trial is enabled")
 	}
 	return nil
 }

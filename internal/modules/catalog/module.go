@@ -27,6 +27,8 @@ func New(deps app.Deps) *Module {
 		deps.Outbox,
 		pgadapter.NewPlans(deps.Pool),
 		pgadapter.NewVersions(deps.Pool),
+		pgadapter.NewAddons(deps.Pool),
+		pgadapter.NewAddonVersions(deps.Pool),
 		deps.IDs,
 		deps.Clock,
 	)
