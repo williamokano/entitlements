@@ -66,7 +66,7 @@ const SellerTable = () => {
       cell: ({ row }) => (
         <>
           <Rating rating={row.original.rating} />
-          <Link to="/apps/ecommerce/reviews" className="hover:text-primary ms-1.25 font-semibold">
+          <Link to="/demo/apps/ecommerce/reviews" className="hover:text-primary ms-1.25 font-semibold">
             ({row.original.rating})
           </Link>
         </>

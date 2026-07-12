@@ -73,7 +73,7 @@ const Features = () => {
             <h2 className="mb-7.5 md:text-2xl text-xl">Connecting conversations across the world</h2>
             <p className="mb-2.5 text-[17px] font-light lead">Fast, secure, and intuitive—our chat platform empowers teams and communities to communicate effortlessly, no matter the distance.</p>
             <p className="text-default-400 text-sm mb-7.5">Experience seamless messaging with built-in privacy features and unmatched reliability.</p>
-            <Link to="/apps/chat" className="btn bg-primary text-white mb-7.5 hover:bg-primary-hover">
+            <Link to="/demo/apps/chat" className="btn bg-primary text-white mb-7.5 hover:bg-primary-hover">
               Check Chat App
             </Link>
             <div className="flex flex-wrap justify-between gap-7.5 mt-7.5">
@@ -95,7 +95,7 @@ const Features = () => {
             <h2 className="mb-7.5 md:text-2xl text-xl">Manage your files seamlessly from anywhere</h2>
             <p className="mb-2.5 text-[17px] font-light lead">A powerful, secure, and intuitive file manager built to simplify how individuals and teams store, share, and organize files.</p>
             <p className="text-default-400 text-sm mb-7.5">Access files instantly, collaborate in real-time, and enjoy peace of mind with encrypted storage.</p>
-            <Link to="/apps/file-manager" className="btn bg-primary text-white mb-7.5 hover:bg-primary-hover">
+            <Link to="/demo/apps/file-manager" className="btn bg-primary text-white mb-7.5 hover:bg-primary-hover">
               Explore File Manager
             </Link>
             <div className="flex flex-wrap justify-between gap-7.5 mt-7.5">
@@ -235,7 +235,7 @@ const Features = () => {
             <h2 className="mb-7.5 md:text-2xl text-xl">Manage your connections with ease</h2>
             <p className="mb-2.5 text-[17px] font-light lead">Our smart contacts app keeps all your relationships organized, accessible, and in sync across devices—at home or on the go.</p>
             <p className="text-default-400 text-sm mb-7.5">Effortlessly import, categorize, and interact with contacts through a clean, privacy-focused interface.</p>
-            <Link to="/apps/users/contacts" className="btn bg-primary text-white mb-7.5 hover:bg-primary-hover">
+            <Link to="/demo/apps/users/contacts" className="btn bg-primary text-white mb-7.5 hover:bg-primary-hover">
               Check Contacts App
             </Link>
             <div className="flex flex-wrap justify-between gap-7.5 mt-7.5">

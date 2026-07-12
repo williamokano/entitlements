@@ -46,7 +46,7 @@ const Page = () => {
                       Keep me signed in
                     </label>
                   </div>
-                  <Link to="/auth/split/reset-pass" className="underline text-default-400">
+                  <Link to="/demo/auth/split/reset-pass" className="underline text-default-400">
                     Forgot Password?
                   </Link>
                 </div>
@@ -58,7 +58,7 @@ const Page = () => {
               </form>
               <p className="text-default-400 mt-7.5 text-center">
                 Not you? Return to&nbsp;
-                <Link to="/auth/split/sign-in" className="text-primary font-semibold underline underline-offset-4">
+                <Link to="/demo/auth/split/sign-in" className="text-primary font-semibold underline underline-offset-4">
                   Sign in
                 </Link>
               </p>

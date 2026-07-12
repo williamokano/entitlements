@@ -65,16 +65,21 @@ Implemented (tasks **T-001 – T-019**):
 - **Example** module (`/api/v1/example/things`) — a reference tenant-scoped
   slice demonstrating the full hexagonal shape and the outbox → consumer flow.
 
-- **Frontend** (`admin/`) — the Inspinia v5 React theme (React 19 + TypeScript +
-  Vite + Tailwind 4), adopted as the project's design system. Currently the
-  vendored theme with its full demo; wiring it to the API (auth, tenants, API
-  keys, roles, catalog, subscription screens), the runtime-configurable Docker
-  image, and CI are the **F-track** tasks in
-  [`docs/TASKS.md`](docs/TASKS.md) — see [`docs/FRONTEND.md`](docs/FRONTEND.md).
+- **Frontend** (`admin/`) — a React SPA (React 19 + TypeScript + Vite +
+  Tailwind 4) on the Inspinia v5 design system, wired to the API (F-001): the
+  real app shell lives at `/` behind a working sign-in (`/auth/sign-in` →
+  `POST /api/v1/auth/login`, transparent single refresh-and-retry on 401, hard
+  logout on refresh reuse), with runtime configuration via
+  `public/app-config.js` (`window.__APP_CONFIG__`: API base URL, tenant mode,
+  branding) so a built bundle switches backends without a rebuild. The full
+  Inspinia theme demo stays browsable under `/demo/*` (droppable from prod
+  builds via `VITE_ENABLE_DEMO=false`). Module screens (auth suite, tenants,
+  members, API keys, roles, catalog, subscription) are placeholder pages until
+  their **F-track** cards land — see [`docs/FRONTEND.md`](docs/FRONTEND.md).
 
 Not yet implemented: subscription **renewals & plan changes** (T-020/021),
-entitlements, and billing (Milestone 3); the frontend screens + infra
-(F-001–F-009). See [`docs/TASKS.md`](docs/TASKS.md) for the full plan.
+entitlements, and billing (Milestone 3); the frontend module screens + Docker
+image (F-002–F-009). See [`docs/TASKS.md`](docs/TASKS.md) for the full plan.
 (Note: the tenant creator is not yet auto-assigned the `owner` role, so an
 initial role assignment currently has to be bootstrapped out of band — see the
 T-016 follow-up in the tasks doc.)
@@ -144,14 +149,20 @@ seed), so tokens do not survive a restart otherwise.
 ```bash
 cd admin
 npm install
-npm run dev        # Vite dev server — currently serves the Inspinia theme demo
+npm run dev        # Vite dev server — real app at /, theme demo at /demo
+npm test           # Vitest + React Testing Library + MSW
+npm run lint       # eslint (our code; the vendored theme is excluded)
+npm run build      # production bundle (VITE_ENABLE_DEMO=false drops the demo)
 ```
 
-The SPA is not wired to the API yet (that's F-001 in
-[`docs/TASKS.md`](docs/TASKS.md)); today `npm run dev` serves the full theme
-demo, which doubles as the component reference for building our screens. See
-[`docs/FRONTEND.md`](docs/FRONTEND.md) for structure, runtime configuration,
-and testing conventions.
+The SPA is wired to the API (F-001): point `admin/public/app-config.js`
+(`window.__APP_CONFIG__.apiBaseUrl`, default `http://localhost:8080`) at a
+running backend, register a user (`POST /api/v1/auth/register`, then verify —
+see the walkthrough above), and sign in at `/auth/sign-in`. Anonymous visitors
+are redirected to the sign-in page; the vendored Inspinia demo stays fully
+browsable under `/demo` and doubles as the component reference for building
+our screens. See [`docs/FRONTEND.md`](docs/FRONTEND.md) for structure, runtime
+configuration, and testing conventions.
 
 ### Build and test
 

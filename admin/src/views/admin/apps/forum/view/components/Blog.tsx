@@ -13,7 +13,7 @@ const Blog = () => {
                 <div className="card-body">
                   <p className="text-default-400 mb-2.5 text-sm font-semibold uppercase">{item.category}</p>
                   <h4 className="mb-2.5 text-base">
-                    <a href="/apps/forum/post" className="hover:text-primary">
+                    <a href="/demo/apps/forum/post" className="hover:text-primary">
                       {item.title}
                     </a>
                   </h4>

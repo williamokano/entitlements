@@ -166,10 +166,10 @@ export type TrafficSource = {
 }
 
 export const trafficSources: TrafficSource[] = [
-  { url: '/dashboard', views: '9.8k', uniques: '8.5k' },
+  { url: '/demo/dashboard', views: '9.8k', uniques: '8.5k' },
   { url: '/ecommerce-index', views: '8.2k', uniques: '7.1k' },
-  { url: '/apps/projects-overview', views: '7.6k', uniques: '6.2k' },
-  { url: '/pages/contact', views: '5.9k', uniques: '4.8k' },
+  { url: '/demo/apps/projects-overview', views: '7.6k', uniques: '6.2k' },
+  { url: '/demo/pages/contact', views: '5.9k', uniques: '4.8k' },
   { url: '/support/faq', views: '5.2k', uniques: '4.3k' },
   { url: '/login', views: '4.7k', uniques: '3.9k' },
 ]

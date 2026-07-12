@@ -53,7 +53,7 @@ const Page = () => {
           ))}
         </div>
         <div className="text-end">
-          <Link to="/apps/ecommerce/products-grid" className="btn bg-success mt-6 text-white hover:bg-success-hover">
+          <Link to="/demo/apps/ecommerce/products-grid" className="btn bg-success mt-6 text-white hover:bg-success-hover">
             View More products
             <Icon icon="arrow-right" className="text-base" />
           </Link>

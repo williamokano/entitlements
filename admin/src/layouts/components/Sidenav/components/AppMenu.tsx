@@ -1,5 +1,6 @@
 import Icon from '@/components/wrappers/Icon'
-import { menuItems } from '@/layouts/components/data'
+import { appMenuItems } from '@/layouts/components/app-data'
+import { menuItems as demoMenuItems } from '@/layouts/components/data'
 import type { MenuItemType } from '@/types'
 import { cn } from '@/utils/helpers'
 import { scrollToElement } from '@/utils/layout'
@@ -90,6 +91,8 @@ const MenuItem = ({ item, level = 0 }: { item: MenuItemType; level?: number }) =
 }
 
 const AppMenu = () => {
+  const { pathname } = useLocation()
+  const menuItems = pathname.startsWith('/demo') ? demoMenuItems : appMenuItems
   const [openMenuKey, setOpenMenuKey] = useState<string | null>(null)
   const scrollToActiveLink = () => {
     const activeItem: HTMLAnchorElement | null = document.querySelector('.menu-link.active')

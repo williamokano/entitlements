@@ -15,14 +15,14 @@ const Page = ({ product }: { product: ProductType }) => {
           <img src={image} alt={name} className="img-fluid" />
         </div>
         <h6 className="card-title mb-2.5 text-sm">
-          <Link to="/apps/ecommerce/product-details" className="hover:text-primary">
+          <Link to="/demo/apps/ecommerce/product-details" className="hover:text-primary">
             {name}
           </Link>
         </h6>
         <div className="flex items-center gap-1.25 mb-2">
           <Rating rating={rating} />
           <span>
-            <Link to="/apps/ecommerce/reviews" className="hover:text-primary font-semibold">
+            <Link to="/demo/apps/ecommerce/reviews" className="hover:text-primary font-semibold">
               ({reviews})
             </Link>
           </span>

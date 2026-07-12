@@ -33,7 +33,7 @@ const Page = () => {
               </form>
               <p className="text-default-400 mt-7.5 text-center">
                 Not you? Return to&nbsp;
-                <a href="/auth/split/sign-in" className="text-primary font-semibold underline underline-offset-4">
+                <a href="/demo/auth/split/sign-in" className="text-primary font-semibold underline underline-offset-4">
                   Sign in
                 </a>
               </p>

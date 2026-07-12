@@ -20,7 +20,7 @@ const EmailSidebar = () => {
         aria-label="Sidebar"
       >
         <SimpleBar className="card-body h-[calc(100vh-200px)]">
-          <Link to="/apps/email/compose" className="btn w-full bg-danger text-white hover:bg-danger-hover">
+          <Link to="/demo/apps/email/compose" className="btn w-full bg-danger text-white hover:bg-danger-hover">
             Compose
           </Link>
           <div className="mt-5">

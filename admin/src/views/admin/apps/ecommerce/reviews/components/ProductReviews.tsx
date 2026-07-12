@@ -38,7 +38,7 @@ const ProductReviews = () => {
         <div className="flex items-center gap-base">
           <img src={row.original.product.image} alt="Product" className="size-11 rounded" />
           <h5>
-            <Link data-sort="product" to="/apps/ecommerce/product-details" className="hover:text-primary">
+            <Link data-sort="product" to="/demo/apps/ecommerce/product-details" className="hover:text-primary">
               {row.original.product.name}
             </Link>
           </h5>

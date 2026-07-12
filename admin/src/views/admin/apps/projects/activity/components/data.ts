@@ -255,7 +255,7 @@ export const expandedActivityData: ExpandedActivityType[] = [
       name: 'Natalie Brooks',
     },
     description: 'Launched the real-time chat feature across all user accounts.',
-    href: '/pages/profile',
+    href: '/demo/pages/profile',
   },
   {
     icon: 'calendar-event',
@@ -271,7 +271,7 @@ export const expandedActivityData: ExpandedActivityType[] = [
       name: 'Oliver Grant',
     },
     description: 'Reviewed sprint progress and discussed remaining tasks with the dev team.',
-    href: '/pages/profile',
+    href: '/demo/pages/profile',
   },
   {
     icon: 'palette',
@@ -287,7 +287,7 @@ export const expandedActivityData: ExpandedActivityType[] = [
       name: 'Clara Jensen',
     },
     description: 'Updated component spacing and colors for improved accessibility.',
-    href: '/pages/profile',
+    href: '/demo/pages/profile',
   },
   {
     icon: 'database',
@@ -303,7 +303,7 @@ export const expandedActivityData: ExpandedActivityType[] = [
       name: 'Leo Armstrong',
     },
     description: 'Improved DB query performance, reducing load time by 35%.',
-    href: '/pages/profile',
+    href: '/demo/pages/profile',
   },
   {
     icon: 'user-hexagon',
@@ -319,7 +319,7 @@ export const expandedActivityData: ExpandedActivityType[] = [
       name: 'Liam Carter',
     },
     description: 'Completed internal security audit with no critical issues found.',
-    href: '/pages/profile',
+    href: '/demo/pages/profile',
   },
   {
     icon: 'user-plus',
@@ -335,7 +335,7 @@ export const expandedActivityData: ExpandedActivityType[] = [
       name: 'Emma Davis',
     },
     description: 'Michael Lee has joined the development team as a Frontend Engineer.',
-    href: '/pages/profile',
+    href: '/demo/pages/profile',
   },
   {
     icon: 'pencil',
@@ -351,7 +351,7 @@ export const expandedActivityData: ExpandedActivityType[] = [
       name: 'Sophia Reed',
     },
     description: 'Refreshed developer documentation with updated APIs and workflows.',
-    href: '/pages/profile',
+    href: '/demo/pages/profile',
   },
   {
     icon: 'check',
@@ -367,6 +367,6 @@ export const expandedActivityData: ExpandedActivityType[] = [
       name: 'Daniel Chen',
     },
     description: 'Finished implementation of the email notification system.',
-    href: '/pages/profile',
+    href: '/demo/pages/profile',
   },
 ]

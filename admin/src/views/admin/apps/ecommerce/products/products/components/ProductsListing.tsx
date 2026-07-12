@@ -31,7 +31,7 @@ const ProductsListing = () => {
           </div>
           <div>
             <h5 className="mb-1.25">
-              <Link to="/apps/ecommerce/product-details" className="hover:text-primary">
+              <Link to="/demo/apps/ecommerce/product-details" className="hover:text-primary">
                 {row.original.name}
               </Link>
             </h5>
@@ -208,14 +208,14 @@ const ProductsListing = () => {
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
           <nav className="flex items-center gap-1.25" aria-label="Tabs" role="tablist" aria-orientation="horizontal">
-            <Link to="/apps/ecommerce/products-grid" className="btn btn-icon bg-primary/10 text-primary hover:bg-primary hover:text-white">
+            <Link to="/demo/apps/ecommerce/products-grid" className="btn btn-icon bg-primary/10 text-primary hover:bg-primary hover:text-white">
               <Icon icon="apps" className="text-lg" />
             </Link>
-            <Link to="/apps/ecommerce/products" className="btn btn-icon bg-primary text-white hover:bg-primary-hover">
+            <Link to="/demo/apps/ecommerce/products" className="btn btn-icon bg-primary text-white hover:bg-primary-hover">
               <Icon icon="list-check" className="text-lg" />
             </Link>
           </nav>
-          <Link to="/apps/ecommerce/product-add" className="btn bg-danger text-white hover:bg-danger-hover">
+          <Link to="/demo/apps/ecommerce/product-add" className="btn bg-danger text-white hover:bg-danger-hover">
             <Icon icon="plus" />
             Add Product
           </Link>

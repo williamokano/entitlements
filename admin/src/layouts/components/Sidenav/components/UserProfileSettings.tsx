@@ -34,7 +34,7 @@ const UserProfileSettings = () => {
                 <Icon icon="settings-2" className="me-1 align-middle text-lg" />
                 <span className="align-middle">Account Settings</span>
               </Link>
-              <Link to="/auth/lock-screen" className="dropdown-item">
+              <Link to="/demo/auth/lock-screen" className="dropdown-item">
                 <Icon icon="lock" className="me-1 align-middle text-lg" />
                 <span className="align-middle">Lock Screen</span>
               </Link>

@@ -153,7 +153,7 @@ const InvoiceList = () => {
               Delete
             </button>
 
-            <Link to="/apps/invoice/create" className="btn btn-icon rounded-full bg-secondary text-white hover:bg-secondary-hover">
+            <Link to="/demo/apps/invoice/create" className="btn btn-icon rounded-full bg-secondary text-white hover:bg-secondary-hover">
               <Icon icon="plus" className="text-base" />
             </Link>
           </div>

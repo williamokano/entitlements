@@ -39,7 +39,7 @@ const InvoiceDetail = () => {
           <Icon icon="download" className="me-1" />
           Download Invoice
         </Link>
-        <Link to="/apps/ecommerce/products/grid" className="btn text-default-400 font-semibold">
+        <Link to="/demo/apps/ecommerce/products/grid" className="btn text-default-400 font-semibold">
           <Icon icon="arrow-left" className="me-1" />
           Continue Shopping
         </Link>

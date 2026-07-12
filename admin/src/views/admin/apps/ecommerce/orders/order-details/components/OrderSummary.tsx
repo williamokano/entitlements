@@ -54,7 +54,7 @@ const OrderSummary = () => {
                     <img src={product1} alt="Wireless Earbuds" className="size-9 rounded-md" />
                     <div>
                       <h5 className="text-default-800 font-medium mb-1.25">
-                        <Link to="/apps/ecommerce/product-details" className="hover:text-primary">
+                        <Link to="/demo/apps/ecommerce/product-details" className="hover:text-primary">
                           Wireless Earbuds
                         </Link>
                       </h5>
@@ -72,7 +72,7 @@ const OrderSummary = () => {
                     <img src={product2} alt="Smart Watch" className="size-9 rounded-md" />
                     <div>
                       <h5 className="text-default-800 font-medium mb-1.25">
-                        <Link to="/apps/ecommerce/product-details" className="hover:text-primary">
+                        <Link to="/demo/apps/ecommerce/product-details" className="hover:text-primary">
                           Smart Watch
                         </Link>
                       </h5>
@@ -90,7 +90,7 @@ const OrderSummary = () => {
                     <img src={product3} alt="Gaming Mouse" className="size-9 rounded-md" />
                     <div>
                       <h5 className="text-default-800 font-medium mb-1.25">
-                        <Link to="/apps/ecommerce/product-details" className="hover:text-primary">
+                        <Link to="/demo/apps/ecommerce/product-details" className="hover:text-primary">
                           Gaming Mouse
                         </Link>
                       </h5>

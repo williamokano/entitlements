@@ -52,7 +52,7 @@ const Page = () => {
                 </p>
                 <p className="text-default-400 text-center">
                   Return to&nbsp;
-                  <Link to="/auth/sign-in" className="text-primary font-semibol underline underline-offset-3">
+                  <Link to="/demo/auth/sign-in" className="text-primary font-semibol underline underline-offset-3">
                     Sign in
                   </Link>
                 </p>

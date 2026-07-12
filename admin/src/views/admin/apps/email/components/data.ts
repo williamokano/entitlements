@@ -12,7 +12,7 @@ export const emailSidebarMenu: EmailSidebarItemType[] = [
   {
     label: 'Inbox',
     icon: 'inbox',
-    link: '/apps/email/inbox',
+    link: '/demo/apps/email/inbox',
     badge: { className: 'text-2xs bg-danger/15', text: '21' },
   },
   {

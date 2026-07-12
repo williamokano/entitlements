@@ -31,11 +31,11 @@ const ProductDisplay = () => {
         </div>
       </div>
       <div className="my-5 flex justify-center gap-2">
-        <Link to="/apps/ecommerce/product/add" className="btn bg-light hover:text-primary">
+        <Link to="/demo/apps/ecommerce/product/add" className="btn bg-light hover:text-primary">
           <Icon icon="pencil" className="text-base" />
           Edit
         </Link>
-        <Link to="/apps/ecommerce/product/add" className="btn bg-danger text-white hover:bg-danger-hover">
+        <Link to="/demo/apps/ecommerce/product/add" className="btn bg-danger text-white hover:bg-danger-hover">
           <Icon icon="circle-dashed-plus" className="text-base" />
           Delisting
         </Link>

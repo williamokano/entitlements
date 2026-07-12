@@ -21,7 +21,7 @@ const Page = () => {
 
                 <p className="text-default-400 mt-7.5 text-center">
                   New here?&nbsp;
-                  <Link to="/auth/sign-up" className="text-primary font-semibold underline underline-offset-4">
+                  <Link to="/demo/auth/sign-up" className="text-primary font-semibold underline underline-offset-4">
                     Create an account
                   </Link>
                 </p>

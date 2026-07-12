@@ -59,7 +59,7 @@ const OrdersList = () => {
       header: 'Order ID',
       cell: ({ row }) => (
         <h5 className="text-sm font-medium">
-          <Link to="/apps/ecommerce/order-details" className="hover:text-primary">
+          <Link to="/demo/apps/ecommerce/order-details" className="hover:text-primary">
             #{row.original.id}
           </Link>
         </h5>
@@ -248,7 +248,7 @@ const OrdersList = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Link to="/apps/ecommerce/order-add" className="btn bg-danger text-white hover:bg-danger-hover">
+          <Link to="/demo/apps/ecommerce/order-add" className="btn bg-danger text-white hover:bg-danger-hover">
             <Icon icon="plus" />
             Add Order
           </Link>

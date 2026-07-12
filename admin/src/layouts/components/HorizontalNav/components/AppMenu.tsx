@@ -1,5 +1,6 @@
 import Icon from '@/components/wrappers/Icon'
-import { menuItems } from '@/layouts/components/data'
+import { appMenuItems } from '@/layouts/components/app-data'
+import { menuItems as demoMenuItems } from '@/layouts/components/data'
 import type { MenuItemType } from '@/types'
 import { cn } from '@/utils/helpers'
 import { Link } from 'react-router'
@@ -75,6 +76,8 @@ const MenuItem = ({ item, linkClass, wrapperClass, level }: { item: MenuItemType
 }
 
 const AppMenu = () => {
+  const { pathname } = useLocation()
+  const menuItems = pathname.startsWith('/demo') ? demoMenuItems : appMenuItems
   return (
     <ul className="navbar-nav">
       {menuItems.map((item, idx) => (

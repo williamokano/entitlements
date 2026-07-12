@@ -82,7 +82,7 @@ const MemberRoleCard = ({ member }: { member: MemberRoleType }) => {
           </span>
 
           <div>
-            <Link to="/apps/users/role-details" className="btn btn-sm border-primary text-primary hover:bg-primary rounded-full border hover:text-white">
+            <Link to="/demo/apps/users/role-details" className="btn btn-sm border-primary text-primary hover:bg-primary rounded-full border hover:text-white">
               Details
             </Link>
           </div>

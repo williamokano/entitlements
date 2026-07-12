@@ -19,7 +19,7 @@ const Blog = () => {
               <div className="md:col-span-2">
                 <div className="card-body">
                   <h6 className="card-title mb-2.5">
-                    <a href="/apps/blog/article" className="text-base hover:text-primary">
+                    <a href="/demo/apps/blog/article" className="text-base hover:text-primary">
                       {item.title}
                     </a>
                   </h6>
@@ -60,7 +60,7 @@ const Blog = () => {
                       </h5>
                     </div>
                   </div>
-                  <a className="text-primary flex items-center gap-1.25 font-semibold" href="/apps/blog/article">
+                  <a className="text-primary flex items-center gap-1.25 font-semibold" href="/demo/apps/blog/article">
                     Read more
                     <Icon icon="arrow-right" />
                   </a>

@@ -14,7 +14,7 @@ const OrderSummary = () => {
             <img src={product.image} className="me-1.25 rounded" width={42} alt="MacBook Air" />
             <div>
               <p className="mb-1.25 font-semibold">
-                <Link to="/apps/ecommerce/product-details" className="hover:text-primary">
+                <Link to="/demo/apps/ecommerce/product-details" className="hover:text-primary">
                   {product.name}
                 </Link>
               </p>

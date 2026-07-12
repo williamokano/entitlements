@@ -31,7 +31,7 @@ const ProductStockTable = () => {
           </div>
           <div>
             <h5 className="mb-1">
-              <Link to="/apps/ecommerce/product-details" className="hover:text-primary">
+              <Link to="/demo/apps/ecommerce/product-details" className="hover:text-primary">
                 {row.original.product.name}
               </Link>
             </h5>
@@ -204,7 +204,7 @@ const ProductStockTable = () => {
           </div>
         </div>
 
-        <Link to="/apps/ecommerce/product-add" className="btn bg-danger text-white hover:bg-danger-hover">
+        <Link to="/demo/apps/ecommerce/product-add" className="btn bg-danger text-white hover:bg-danger-hover">
           <Icon icon="plus" />
           Add Product
         </Link>

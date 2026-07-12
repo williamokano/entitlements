@@ -1,18 +1,10 @@
 import { LayoutProvider } from '@/context/useLayoutContext'
-import { useAuth } from '@/hooks/useAuth'
 import { preline } from '@/utils/preline'
-import { useNavigate } from 'react-router'
-import React, { useEffect } from 'react'
+import React from 'react'
 
+// Route protection lives in the RequireAuth wrapper (see routes/index.tsx),
+// so this wrapper only wires up global providers.
 const AppProvidersWrapper = ({ children }: { children: React.ReactNode }) => {
-  const navigate = useNavigate()
-
-  const { isAuthenticated } = useAuth()
-  useEffect(() => {
-    if (!isAuthenticated) {
-      navigate('/auth/sign-in', { replace: true })
-    }
-  }, [])
   preline.init()
   return <LayoutProvider>{children}</LayoutProvider>
 }

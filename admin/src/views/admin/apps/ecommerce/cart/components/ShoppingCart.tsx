@@ -73,7 +73,7 @@ const ShoppingCart = () => {
           </table>
         </div>
         <div className="border-default-300 border-t pt-7.5">
-          <Link to="/apps/ecommerce/products-grid" className="text-primary inline-flex items-center gap-1.5 font-medium">
+          <Link to="/demo/apps/ecommerce/products-grid" className="text-primary inline-flex items-center gap-1.5 font-medium">
             <Icon icon="arrow-left" />
             Continue Shopping
           </Link>
