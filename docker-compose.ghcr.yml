@@ -1,0 +1,17 @@
+# Run the published GHCR images instead of building locally.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.ghcr.yml up
+#
+# Pulls the api + admin images published by CI on main. Override the tag with
+# IMAGE_TAG (default: latest), e.g. IMAGE_TAG=sha-abc1234 docker compose ...
+# See docs/RUNNING.md → "Running the published images".
+services:
+  api:
+    build: !reset null
+    image: ghcr.io/williamokano/entitlements/api:${IMAGE_TAG:-latest}
+    pull_policy: always
+
+  admin:
+    build: !reset null
+    image: ghcr.io/williamokano/entitlements/admin:${IMAGE_TAG:-latest}
+    pull_policy: always

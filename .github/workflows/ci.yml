@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       admin: ${{ steps.filter.outputs.admin }}
+      go: ${{ steps.filter.outputs.go }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,6 +26,14 @@ jobs:
           filters: |
             admin:
               - 'admin/**'
+              - '.github/workflows/ci.yml'
+            go:
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Dockerfile'
+              - 'migrations/**'
+              - 'sqlc.yaml'
               - '.github/workflows/ci.yml'
 
   admin:
@@ -129,6 +138,73 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/)" = 200
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/some/deep/route)" = 200
           docker rm -f admin-smoke
+
+  api-image:
+    name: api · docker image
+    runs-on: ubuntu-latest
+    needs: changes
+    # Build the image on any PR that touches Go/Docker/migrations, and always on
+    # main (where we additionally push the tagged image to GHCR).
+    if: needs.changes.outputs.go == 'true' || github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata (tags + labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/api
+          tags: |
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          # Push tagged (sha + latest) images only on main; PRs build for
+          # verification without pushing.
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          load: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Smoke test the image
+        # The scratch image has no shell; check the binary starts and rejects a
+        # bad config fast (it exits non-zero without a reachable database, which
+        # proves the entrypoint runs). Disable errexit: the expected result is a
+        # non-zero `docker run`, which would otherwise abort the step.
+        if: github.ref != 'refs/heads/main'
+        run: |
+          set +e
+          IMAGE="$(echo '${{ steps.meta.outputs.tags }}' | head -n1)"
+          # No DB reachable → the API must fail to boot (non-zero), not hang.
+          timeout 20 docker run --rm -e APP_ENV=development \
+            -e DATABASE_URL='postgres://x:x@127.0.0.1:1/x?sslmode=disable' "$IMAGE"
+          code=$?
+          # 0 would mean it booted without a DB (wrong); 124 = timeout (hung).
+          if [ "$code" = "0" ] || [ "$code" = "124" ]; then
+            echo "unexpected exit code $code (0=booted without DB, 124=hung)"; exit 1
+          fi
+          echo "api image starts and exits non-zero without a database (code $code) — OK"
 
   build:
     name: lint · test · build

@@ -36,7 +36,12 @@ type Config struct {
 	Environment Environment `env:"APP_ENV" envDefault:"development"`
 	HTTPPort    string      `env:"PORT" envDefault:"8080"`
 	DatabaseURL string      `env:"DATABASE_URL" envDefault:"postgres://entitlements:entitlements@localhost:5432/entitlements?sslmode=disable"`
-	LogLevel    string      `env:"LOG_LEVEL" envDefault:"info"`
+	// MigrationDatabaseURL, when set, is the DSN used to apply migrations (DDL).
+	// It lets migrations run as a privileged owner role while the app serves
+	// requests as a least-privilege runtime role via DatabaseURL. Empty ⇒
+	// migrations run with DatabaseURL (single-role setup).
+	MigrationDatabaseURL string `env:"MIGRATION_DATABASE_URL"`
+	LogLevel             string `env:"LOG_LEVEL" envDefault:"info"`
 
 	// Observability. OTLPEndpoint is the OTLP/HTTP collector URL; when empty,
 	// tracing/metrics are created but not exported (no-op).
@@ -54,6 +59,15 @@ type Config struct {
 
 // IsProduction reports whether the configuration targets production.
 func (c Config) IsProduction() bool { return c.Environment == EnvProduction }
+
+// MigrationDSN returns the DSN to apply migrations with: MigrationDatabaseURL
+// when set (privileged owner role), otherwise DatabaseURL (single-role setup).
+func (c Config) MigrationDSN() string {
+	if strings.TrimSpace(c.MigrationDatabaseURL) != "" {
+		return c.MigrationDatabaseURL
+	}
+	return c.DatabaseURL
+}
 
 // Validate enforces cross-field invariants that a plain parse cannot.
 func (c Config) Validate() error {

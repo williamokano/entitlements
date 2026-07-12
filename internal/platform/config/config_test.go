@@ -61,6 +61,17 @@ func TestValidateRejectsProductionWithDefaultDSN(t *testing.T) {
 	}
 }
 
+func TestMigrationDSNFallsBackToDatabaseURL(t *testing.T) {
+	c := Config{DatabaseURL: "postgres://app@db/x"}
+	if got := c.MigrationDSN(); got != c.DatabaseURL {
+		t.Fatalf("MigrationDSN() = %q, want fallback to DatabaseURL %q", got, c.DatabaseURL)
+	}
+	c.MigrationDatabaseURL = "postgres://owner@db/x"
+	if got := c.MigrationDSN(); got != c.MigrationDatabaseURL {
+		t.Fatalf("MigrationDSN() = %q, want MigrationDatabaseURL %q", got, c.MigrationDatabaseURL)
+	}
+}
+
 func TestParseLoadsDotEnvFile(t *testing.T) {
 	type dotenvConfig struct {
 		FromFile string `env:"CONFIG_TEST_DOTENV"`

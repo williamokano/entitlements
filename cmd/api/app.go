@@ -154,7 +154,9 @@ func run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	}
 	defer pool.Close()
 
-	if err := postgres.MigrateUp(ctx, cfg.DatabaseURL); err != nil {
+	// Migrations (DDL) run with the migration DSN — a privileged owner role when
+	// MIGRATION_DATABASE_URL is set, otherwise the same role as the runtime pool.
+	if err := postgres.MigrateUp(ctx, cfg.MigrationDSN()); err != nil {
 		return fmt.Errorf("run migrations: %w", err)
 	}
 

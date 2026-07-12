@@ -468,6 +468,22 @@ must be bootstrapped out of band. Wire owner-on-create (or bridge
 - integration: `TestSeededDataSupportsDemoFlow` — seeded plan/tenant/user can execute the signup E2E path.
 - CI gate: `docs/demo.sh` executed against a seeded compose stack (smoke).
 
+### T-030 · Postgres Row-Level Security (defense-in-depth tenant isolation) · **L**
+**Depends on**: T-010 (tenant context), T-003 (UnitOfWork). **Spec**: [`docs/RUNNING.md`](./RUNNING.md) §7.
+**Context**: today tenant isolation is enforced in the app layer (every tenant-scoped repository query filters by the context `tenant_id`). This task adds Postgres RLS as a second, database-enforced layer. The least-privilege roles already exist (`deploy/db/init`): the runtime `entitlements_app` role has **no `BYPASSRLS`**, so policies will bind it.
+**Deliverables**:
+- A per-transaction tenant GUC: the `UnitOfWork` sets `SET LOCAL app.tenant_id = <ctx tenant>` at transaction start for tenant-scoped work; system-context transactions (`authctx.IsSystem`) skip it. Audit that **every** tenant-scoped read runs inside a transaction (some currently use the ambient pool directly) — route them through the UoW or a read helper that sets the GUC.
+- A migration per module enabling `ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY` on every tenant-scoped table, with a `tenant_isolation` policy (`USING` + `WITH CHECK` on `tenant_id = current_setting('app.tenant_id')::uuid`). Platform-shared/tenant-less tables are exempt.
+- A bypass path for legitimately cross-tenant work: migrations run as the `BYPASSRLS` owner; background jobs (renewals/trials) that scan all tenants use a system role or `authctx.WithSystemContext` that skips the GUC. Document which operations bypass and why.
+- Config flag `RLS_ENABLED` (default off → on once verified) so the switch is reversible.
+**Acceptance criteria**: with RLS on, a query for tenant A cannot read/write tenant B's rows even if the app-layer filter is bypassed; cross-tenant jobs and migrations still work; no request path runs a tenant query outside a GUC-bound transaction.
+**Expected tests** (integration):
+- `TestRLSCrossTenantReadReturnsZeroRows` — set `app.tenant_id` to A, query B's data directly ⇒ 0 rows (DB-enforced, not app-filtered).
+- `TestRLSWriteForOtherTenantRejected` — insert/update with a mismatched `tenant_id` ⇒ policy violation.
+- `TestSystemContextBypassScansAllTenants` — a system-context/bypass-role scan sees every tenant (renewal job still works).
+- `TestForceRLSAppliesToTableOwner` — even a direct owner connection is constrained where `FORCE` is set.
+- unit: the UoW sets `SET LOCAL app.tenant_id` for a tenant context and omits it for a system context.
+
 ---
 
 ## Frontend track (F-tasks)
