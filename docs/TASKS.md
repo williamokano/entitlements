@@ -350,8 +350,9 @@ must be bootstrapped out of band. Wire owner-on-create (or bridge
 - integration: `TestApplyScheduledChangeAtBoundaryRepinsAndEmits` (invoked via the hook T-021 will call).
 - integration: `TestAddonAttachDetachEmitsSubscriptionAddonChanged`.
 
-### T-021 · Subscription: renewal + trial jobs · **M**
+### T-021 · Subscription: renewal + trial jobs · **M** · ✅ DONE (PR #26)
 **Depends on**: T-006, T-019 (T-020 for scheduled-change application).
+**Note (implemented)**: exactly-once emission is gated by a `renewal_emitted_period_end` marker on the subscription (not by advisory state), so duplicate ticks and multiple runners still yield one `subscription.renewal_due` per period. `BILLING_DISABLED` (default `true` until T-026) makes the renewal auto-advance the period; when billing is enabled the period advances only when the module's idempotent `billing.invoice_paid` consumer fires. Trial resolution keys off the plan version's `card_required`: no card → convert to active (starting the first paid period at the trial end); card required → expire (no payment method on file yet). `SUBSCRIPTION_TRIAL_ENDING_DAYS` (default 3) sets the pre-expiry `TrialEnding` lead time. Frontend: none (no new user-facing endpoints; renewal/trial are background jobs surfaced through the existing subscription view — F-009).
 **Deliverables**: recurring job scanning due subscriptions: emits `SubscriptionRenewalDue`, applies scheduled changes at rollover, advances period only after `InvoicePaid` (config flag `billing.disabled=true` auto-advances until T-026); trial job: `TrialEnding` (configurable days before), `TrialEnded` → convert or expire per plan config.
 **Acceptance criteria**: renewal emission is exactly-once per period even with duplicate ticks/replicas; trial events fire at the right frozen-clock moments; the billing-disabled path keeps the module testable standalone.
 **Expected tests** (integration, frozen clock):
@@ -534,7 +535,7 @@ paired F-card).
 **Endpoints**: `POST|GET /api/v1/tenants/{id}/invitations`, `POST .../invitations/{invId}/{resend,accept,decline}`, `GET /api/v1/tenants/{id}/members`, `DELETE /api/v1/tenants/{id}/members/{userId}`.
 **Expected tests** (MSW): members table renders and remove confirms first; invite form validates email; accept page drives the accept endpoint then routes onward (sign-in when anonymous).
 
-### F-006 · API keys screen · **S** *(backend: T-014 — merged)*
+### F-006 · API keys screen · **S** · ✅ DONE (PR #27) *(backend: T-014 — merged)*
 **Depends on**: F-001.
 **Screens**: adapt the theme's near-1:1 `apps/api-keys` page — list (prefix, scopes, created/last-used), create modal (name + scopes) with **one-time secret reveal** + copy, revoke with confirm.
 **Endpoints**: `POST|GET /api/v1/api-keys`, `DELETE /api/v1/api-keys/{id}`.

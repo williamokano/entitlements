@@ -18,7 +18,7 @@ conventions.
 core) in progress.** The API boots, runs its migrations on startup, and serves
 real endpoints.
 
-Implemented (tasks **T-001 – T-020**):
+Implemented (tasks **T-001 – T-021**):
 
 - **Platform kernel** — config, UUIDv7 IDs, clock, Postgres pool + UnitOfWork
   (tx-in-context), migration runner, transactional outbox + relay worker,
@@ -67,6 +67,11 @@ Implemented (tasks **T-001 – T-020**):
   change** applied at the period boundary — and **addon attach/detach** with
   quantities, plan-compatibility enforcement, and `plan_changed` /
   `addon_changed` events carrying the data billing will need for proration.
+  Background **renewal & trial jobs** (advisory-lock scheduler) emit
+  `renewal_due` exactly once per period, apply scheduled downgrades at rollover,
+  advance the period on `invoice_paid` (or immediately while `BILLING_DISABLED`),
+  and fire `trial_ending` / `trial_ended` — converting or expiring the trial per
+  the plan's `card_required` config.
 - **Example** module (`/api/v1/example/things`) — a reference tenant-scoped
   slice demonstrating the full hexagonal shape and the outbox → consumer flow.
 
@@ -78,18 +83,21 @@ Implemented (tasks **T-001 – T-020**):
   `public/app-config.js` (`window.__APP_CONFIG__`: API base URL, tenant mode,
   branding) so a built bundle switches backends without a rebuild. The full
   Inspinia theme demo stays browsable under `/demo/*` (droppable from prod
-  builds via `VITE_ENABLE_DEMO=false`). Module screens (auth suite, tenants,
-  members, API keys, roles, catalog, subscription) are placeholder pages until
-  their **F-track** cards land — see [`docs/FRONTEND.md`](docs/FRONTEND.md).
+  builds via `VITE_ENABLE_DEMO=false`). The **API keys** screen is live
+  (`/api-keys`: list, create with a one-time secret reveal, revoke — F-006);
+  the remaining module screens (auth suite, tenants, members, roles, catalog,
+  subscription) are placeholder pages until their **F-track** cards land — see
+  [`docs/FRONTEND.md`](docs/FRONTEND.md).
 
 The admin SPA also ships as a **generic Docker image** (F-002): one image built
 once, configured entirely at container start via environment variables (API URL,
 tenant mode, branding, demo toggle) — see *Running the admin SPA in Docker*
 below. `docker compose up` now brings up Postgres, the API, and the SPA together.
 
-Not yet implemented: subscription **renewals** (T-021), entitlements, and
-billing (Milestone 3); the frontend module screens (F-003–F-009). See
-[`docs/TASKS.md`](docs/TASKS.md) for the full plan.
+Not yet implemented: entitlements and billing (Milestone 3); the remaining
+frontend module screens (auth suite, tenants, members, roles, catalog,
+subscription — F-003–F-005, F-007–F-009). See [`docs/TASKS.md`](docs/TASKS.md)
+for the full plan.
 (Note: the tenant creator is not yet auto-assigned the `owner` role, so an
 initial role assignment currently has to be bootstrapped out of band — see the
 T-016 follow-up in the tasks doc.)
