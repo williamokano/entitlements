@@ -104,6 +104,10 @@ func buildApplication(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger
 		tenant.WithExempt("/healthz", "/readyz", "/api/v1/tenants", "/api/v1/auth", "/api/v1/catalog"))
 
 	mws := []httpx.Middleware{
+		// CORS is outermost so browser preflight (OPTIONS) is answered before
+		// auth/tenant/handler layers, and allow-origin is set on every response
+		// (including errors) for an allowed origin.
+		httpx.CORS(cfg.CORSAllowedOrigins),
 		httpx.RequestID(ids),
 		observability.TracingMiddleware(otel.GetTracerProvider()),
 		httpx.Recovery(logger),

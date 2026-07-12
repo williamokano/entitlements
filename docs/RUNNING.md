@@ -325,6 +325,7 @@ baked into the JS bundle.
 | `PORT` | `8080` | HTTP listen port. |
 | `DATABASE_URL` | local dev DSN | Runtime connection (least-privilege app role in the roles overlay). |
 | `MIGRATION_DATABASE_URL` | *(empty → uses `DATABASE_URL`)* | DSN migrations run with (privileged owner role). |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | Comma-separated browser origins allowed to call the API cross-origin (the SPA runs on a different origin). `*` allows any. |
 | `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error`. |
 | `BILLING_DISABLED` | `true` | Auto-advance subscription periods without a billing module (until T-025/026). |
 | `SUBSCRIPTION_TRIAL_ENDING_DAYS` | `3` | Days before trial end to emit `trial_ending`. |
@@ -349,6 +350,7 @@ baked into the JS bundle.
 |---|---|
 | Schema/roles changes didn't take effect | Role init and `POSTGRES_*` only apply on a **fresh** volume: `docker compose down -v` then up. |
 | `admin` can't reach the API | `API_BASE_URL` must be the **host** origin the browser can reach (e.g. `http://localhost:8080`), not `http://api:8080`. |
+| Browser **CORS** error calling the API | The browser origin serving the SPA must be in the API's `CORS_ALLOWED_ORIGINS` (default `http://localhost:3000`). If you serve the SPA on another host/port, add it (comma-separated), or set `*` for local experimentation. |
 | API exits on boot with a DB error | Postgres wasn't ready or the DSN/role is wrong. The `api` service waits on the postgres healthcheck; check `docker compose logs postgres`. |
 | Port already in use | Something else is on 3000/8080/5432 — stop it or remap the `ports:` in compose. |
 | Want just the DB (run API via `make run`) | `docker compose up -d postgres`, then `make run`. |
