@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -21,10 +22,14 @@ import (
 
 const consumerName = "tenant-provisioning"
 
+// defaultInvitationTTL bounds how long a tenant invitation stays acceptable.
+const defaultInvitationTTL = 7 * 24 * time.Hour
+
 // Module wires the tenant module from platform dependencies.
 type Module struct {
 	deps    app.Deps
 	svc     *service.Service
+	members *service.MembershipService
 	handler http.Handler
 	hooks   []ports.ProvisioningHook
 }
@@ -42,7 +47,12 @@ func WithProvisioningHooks(hooks ...ports.ProvisioningHook) Option {
 func New(deps app.Deps, opts ...Option) *Module {
 	repo := pgadapter.New(deps.Pool)
 	svc := service.New(deps.UnitOfWork, deps.Outbox, repo, deps.IDs, deps.Clock)
-	m := &Module{deps: deps, svc: svc, handler: rest.New(svc)}
+	members := service.NewMembershipService(
+		deps.UnitOfWork, deps.Outbox,
+		pgadapter.NewMemberships(deps.Pool), pgadapter.NewInvitations(deps.Pool),
+		deps.IDs, deps.Clock, defaultInvitationTTL,
+	)
+	m := &Module{deps: deps, svc: svc, members: members, handler: rest.New(svc, members)}
 	for _, opt := range opts {
 		opt(m)
 	}
@@ -76,6 +86,10 @@ func (m *Module) Subscriptions() []app.Subscription {
 
 // Port returns the module's public facade for other modules.
 func (m *Module) Port() ports.TenantReader { return m.svc }
+
+// MembershipPort returns the membership facade other modules use (e.g.
+// authorization resolves a user's role in a tenant through it).
+func (m *Module) MembershipPort() ports.MembershipReader { return m.members }
 
 // loggingHook is the default provisioning hook: it logs each provisioned
 // tenant. Real SaaS steps (seed roles, create a trial subscription) are
