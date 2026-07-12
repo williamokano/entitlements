@@ -13,7 +13,7 @@ See [`docs/PLAN.md`](docs/PLAN.md) for the architecture and
 **Milestone 1 (platform kernel) complete; Milestone 2 (identity) in progress.**
 The API boots, runs its migrations on startup, and serves real endpoints.
 
-Implemented (tasks **T-001 – T-014**):
+Implemented (tasks **T-001 – T-015**):
 
 - **Platform kernel** — config, UUIDv7 IDs, clock, Postgres pool + UnitOfWork
   (tx-in-context), migration runner, transactional outbox + relay worker,
@@ -22,8 +22,10 @@ Implemented (tasks **T-001 – T-014**):
   an idempotency-key middleware.
 - **Tenant** module (`/api/v1/tenants`) — lifecycle CRUD (create / update /
   suspend / reactivate / soft-delete), tenant-resolution middleware
-  (claim → `X-Tenant-ID` header → subdomain), and an event-driven provisioning
-  pipeline.
+  (claim → `X-Tenant-ID` header → subdomain), an event-driven provisioning
+  pipeline, and **membership + invitations** (invite by email — including
+  not-yet-registered users — accept / decline / resend with expiry, member
+  listing and removal; a user can belong to many tenants).
 - **Authentication** module (`/api/v1/auth`) — register, login, JWT access
   tokens (EdDSA, offline-verifiable) + rotating refresh tokens with
   family-reuse detection, logout, email verification, password recovery,
@@ -37,11 +39,11 @@ Implemented (tasks **T-001 – T-014**):
 - **Example** module (`/api/v1/example/things`) — a reference tenant-scoped
   slice demonstrating the full hexagonal shape and the outbox → consumer flow.
 
-Not yet implemented: membership/invitations (T-015), authorization RBAC (T-016),
-and the business modules — catalog, subscription, entitlements, billing
-(Milestone 3). The auth middleware authenticates and populates the principal,
-but per-route authorization (scope/permission enforcement) arrives with T-016.
-See [`docs/TASKS.md`](docs/TASKS.md) for the full plan.
+Not yet implemented: authorization RBAC (T-016) and the business modules —
+catalog, subscription, entitlements, billing (Milestone 3). The auth middleware
+authenticates and populates the principal, but per-route authorization
+(scope/permission enforcement) arrives with T-016. See
+[`docs/TASKS.md`](docs/TASKS.md) for the full plan.
 
 ## Try it locally
 

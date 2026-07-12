@@ -257,7 +257,7 @@ graph TD
 - integration: `TestAPIKeyLastUsedAtUpdatedOnUse`.
 - integration (HTTP): `TestAPIKeyCRUDEndpoints` — create/list/revoke, tenant-scoped.
 
-### T-015 · Tenant membership + invitations · **M**
+### T-015 · Tenant membership + invitations · **M** · ✅ DONE (PR #18)
 **Depends on**: T-010, T-012. **Spec**: PLAN.md §1.
 **Deliverables**: membership (user↔tenant, role reference, status); invitations by email (existing or future user) with accept/decline, expiry, resend; publishes `MemberJoined/Left`, `InvitationSent`; REST under `/api/v1/tenants/{id}/members|invitations`; `ports.MembershipReader`.
 **Acceptance criteria**: a user can belong to multiple tenants; invitations expire; accepting an invite for a not-yet-registered email works after registration.

@@ -14,7 +14,31 @@ const (
 	EventTenantSuspended   = "tenant.suspended"
 	EventTenantReactivated = "tenant.reactivated"
 	EventTenantDeleted     = "tenant.deleted"
+	EventMemberJoined      = "tenant.member.joined"
+	EventMemberLeft        = "tenant.member.left"
+	EventInvitationSent    = "tenant.invitation.sent"
 )
+
+// MemberJoined is published when a user joins a tenant.
+type MemberJoined struct {
+	TenantID uuid.UUID `json:"tenant_id"`
+	UserID   uuid.UUID `json:"user_id"`
+	Role     string    `json:"role"`
+}
+
+// MemberLeft is published when a user is removed from a tenant.
+type MemberLeft struct {
+	TenantID uuid.UUID `json:"tenant_id"`
+	UserID   uuid.UUID `json:"user_id"`
+}
+
+// InvitationSent is published when a tenant invitation is created (or resent).
+type InvitationSent struct {
+	TenantID     uuid.UUID `json:"tenant_id"`
+	InvitationID uuid.UUID `json:"invitation_id"`
+	Email        string    `json:"email"`
+	Role         string    `json:"role"`
+}
 
 // TenantCreated is the payload of EventTenantCreated.
 type TenantCreated struct {
@@ -52,6 +76,20 @@ type TenantInfo struct {
 type TenantReader interface {
 	GetByID(ctx context.Context, id uuid.UUID) (TenantInfo, error)
 	GetBySlug(ctx context.Context, slug string) (TenantInfo, error)
+}
+
+// MembershipInfo is the read model of a user's membership in a tenant.
+type MembershipInfo struct {
+	TenantID uuid.UUID
+	UserID   uuid.UUID
+	Role     string
+	Active   bool
+}
+
+// MembershipReader is the tenant module's membership facade for other modules
+// (e.g. authorization resolves a user's role in a tenant through it).
+type MembershipReader interface {
+	GetMembership(ctx context.Context, tenantID, userID uuid.UUID) (MembershipInfo, error)
 }
 
 // ProvisioningHook performs one onboarding step after a tenant is created.

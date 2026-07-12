@@ -38,11 +38,13 @@ const (
 )
 
 // Principal is the authenticated caller. It is populated by the authentication
-// middleware (T-012/T-014); Subject is the user or API-key ID. Scopes carries an
-// API key's scopes (empty for user principals).
+// middleware (T-012/T-014); Subject is the user or API-key ID. Email is set for
+// user principals (empty for machine keys). Scopes carries an API key's scopes
+// (empty for user principals).
 type Principal struct {
 	Kind    PrincipalKind
 	Subject string
+	Email   string
 	Scopes  []string
 }
 

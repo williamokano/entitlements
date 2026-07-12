@@ -16,8 +16,10 @@ import (
 )
 
 // New returns the tenant module's HTTP handler. Routes are prefix-relative; the
-// composition root mounts them under /api/v1/tenants.
-func New(svc *service.Service) http.Handler {
+// composition root mounts them under /api/v1/tenants. It serves both the
+// tenant-admin routes and the membership/invitation routes nested under a
+// tenant id.
+func New(svc *service.Service, mem *service.MembershipService) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /", createTenant(svc))
 	mux.HandleFunc("GET /{id}", getTenant(svc))
@@ -25,6 +27,7 @@ func New(svc *service.Service) http.Handler {
 	mux.HandleFunc("POST /{id}/suspend", lifecycle(svc.Suspend))
 	mux.HandleFunc("POST /{id}/reactivate", lifecycle(svc.Reactivate))
 	mux.HandleFunc("DELETE /{id}", lifecycle(svc.Delete))
+	registerMembership(mux, mem)
 	return mux
 }
 

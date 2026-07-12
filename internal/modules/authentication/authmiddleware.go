@@ -42,6 +42,7 @@ func NewAuthMiddleware(verifier ports.TokenVerifier, keys ports.APIKeyAuthentica
 				ctx = authctx.WithPrincipal(ctx, authctx.Principal{
 					Kind:    authctx.PrincipalUser,
 					Subject: ident.UserID.String(),
+					Email:   ident.Email,
 				})
 			case "apikey":
 				mi, err := keys.AuthenticateAPIKey(ctx, credential)

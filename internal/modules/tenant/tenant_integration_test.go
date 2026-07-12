@@ -25,10 +25,13 @@ import (
 )
 
 func newDeps(t *testing.T) (app.Deps, *events.Bus) {
+	return newDepsClock(t, clock.System)
+}
+
+func newDepsClock(t *testing.T, clk clock.Clock) (app.Deps, *events.Bus) {
 	t.Helper()
 	pool := testkit.Postgres(t)
 	ids := id.UUIDv7{}
-	clk := clock.System
 	bus := events.NewBus()
 	deps := app.Deps{
 		Pool:       pool,
