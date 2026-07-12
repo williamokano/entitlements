@@ -11,7 +11,8 @@ This repository is a **reusable Go backend skeleton for SaaS products**: a modul
 | Language | Go (latest stable, currently 1.24.x), single `go.mod` | Monolith module-based; one module, packages as boundaries |
 | Persistence | PostgreSQL + `pgx/v5` + `sqlc` | Type-safe SQL, no ORM leaking into domain |
 | Migrations | `goose` (embedded, per-module folders) | Simple, supports Go + SQL migrations |
-| Tenancy | Shared schema, `tenant_id` on every tenant-scoped table, enforced via repository layer + tenant-aware context; optional Postgres RLS later | Simplest to operate for a starter; isolation strategy hidden behind repositories so schema-per-tenant can replace it per-SaaS |
+| Tenancy | Shared schema, `tenant_id` on every tenant-scoped table, enforced via repository layer + tenant-aware context. DB-enforced Postgres RLS is a defense-in-depth second layer (T-030) — the runtime role already runs without `BYPASSRLS`; see [`docs/RUNNING.md`](./RUNNING.md) §7 | Simplest to operate for a starter; isolation strategy hidden behind repositories so schema-per-tenant can replace it per-SaaS |
+| Deployment | Two Docker images from this monorepo — `api` (Go, `scratch`) and `admin` (nginx, runtime-configured) — published to GHCR by CI on `main`. Migrations apply on API startup; a split owner/app DB role is available (`MIGRATION_DATABASE_URL`) | One `docker compose up` runs the whole stack; the admin image is generic and configured per environment at container start |
 | Transport | REST, stdlib `net/http` (1.22+ method routing), one router per module mounted at composition root | Zero framework lock-in |
 | Module comms | Synchronous: small public **ports** (interfaces) each module exposes. Asynchronous: **domain events** on an in-process bus backed by a **transactional outbox** | Outbox makes phase-2 webhooks/broker trivial; events keep billing/entitlements decoupled from subscription |
 | IDs | UUIDv7 | Sortable, index-friendly |

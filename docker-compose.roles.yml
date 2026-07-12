@@ -1,0 +1,22 @@
+# Least-privilege database roles overlay.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.roles.yml up --build
+#
+# This overlay runs migrations (DDL) as `entitlements_owner` and serves requests
+# as the restricted `entitlements_app` role, instead of the single superuser the
+# base compose uses. The roles are created by deploy/db/init on first init of an
+# empty data volume — if you have already started the base stack, recreate the
+# volume first:  docker compose down -v
+#
+# See docs/RUNNING.md → "Database roles & least privilege".
+services:
+  postgres:
+    volumes:
+      - ./deploy/db/init:/docker-entrypoint-initdb.d:ro
+
+  api:
+    environment:
+      # Runtime: least-privilege app role (DML only, subject to RLS once enabled).
+      DATABASE_URL: postgres://entitlements_app:app@postgres:5432/entitlements?sslmode=disable
+      # Migrations: privileged owner role (DDL).
+      MIGRATION_DATABASE_URL: postgres://entitlements_owner:owner@postgres:5432/entitlements?sslmode=disable

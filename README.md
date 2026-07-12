@@ -104,13 +104,16 @@ T-016 follow-up in the tasks doc.)
 
 ## Try it locally
 
+**Want the whole product (Postgres + API + admin SPA) in one command, with a
+guided walkthrough, database-role setup, and the RLS hardening path?** See the
+complete guide: **[`docs/RUNNING.md`](docs/RUNNING.md)**.
+
 ```bash
+docker compose up --build     # Postgres + API + SPA → API :8080, SPA :3000
+# …or just the DB for the Go dev loop:
 docker compose up -d postgres # Postgres on :5432 (credentials match the app default)
 make run                      # applies migrations on startup, serves on :8080
 ```
-
-(Or run the whole stack in containers — Postgres + API + SPA — with
-`docker compose up`; see *Running the admin SPA in Docker* below.)
 
 ```bash
 # Health
@@ -220,9 +223,13 @@ backend resolves the tenant from the `Host` header; point wildcard DNS (or
 `/etc/hosts` entries like `acme.localhost`) at the container.
 
 Or bring up the whole stack (Postgres + API + SPA) with `docker compose up`
-(SPA on `:3000`, API on `:8080`). The published image is available on GHCR as
-`ghcr.io/williamokano/entitlements/admin` (pushed on `main`, tagged `latest` +
-commit `sha`).
+(SPA on `:3000`, API on `:8080`). CI publishes **both** images to GHCR on `main`
+(tagged `latest` + commit `sha`): `ghcr.io/williamokano/entitlements/admin` and
+`ghcr.io/williamokano/entitlements/api`. Run the stack from the published images
+with the GHCR overlay — `docker compose -f docker-compose.yml -f
+docker-compose.ghcr.yml up`. Full instructions, plus a least-privilege database
+role setup and the Row-Level-Security path, are in
+**[`docs/RUNNING.md`](docs/RUNNING.md)**.
 
 ### Build and test
 
