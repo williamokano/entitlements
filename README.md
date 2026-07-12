@@ -10,10 +10,10 @@ See [`docs/PLAN.md`](docs/PLAN.md) for the architecture and
 
 ## Status
 
-**Milestone 1 (platform kernel) complete; Milestone 2 (identity) in progress.**
-The API boots, runs its migrations on startup, and serves real endpoints.
+**Milestones 1 (platform kernel) and 2 (identity) complete.** The API boots,
+runs its migrations on startup, and serves real endpoints.
 
-Implemented (tasks **T-001 – T-015**):
+Implemented (tasks **T-001 – T-016**):
 
 - **Platform kernel** — config, UUIDv7 IDs, clock, Postgres pool + UnitOfWork
   (tx-in-context), migration runner, transactional outbox + relay worker,
@@ -36,14 +36,20 @@ Implemented (tasks **T-001 – T-015**):
   is derived from the key. Tenant-scoped, per-tenant API keys with argon2id-hashed
   secrets (shown once), scopes, `last_used_at`, and immediate revocation are
   managed under `/api/v1/api-keys`.
+- **Authorization** module (`/api/v1/roles`) — dynamic RBAC: tenant-scoped roles
+  as data (`resource:action` permissions with a `resource:*` wildcard),
+  owner/admin/member seeded per tenant (system roles are immutable), role CRUD,
+  assign/unassign to users, and a `RequirePermission` middleware that enforces
+  permissions at the HTTP layer. The same user can hold different roles in
+  different tenants.
 - **Example** module (`/api/v1/example/things`) — a reference tenant-scoped
   slice demonstrating the full hexagonal shape and the outbox → consumer flow.
 
-Not yet implemented: authorization RBAC (T-016) and the business modules —
-catalog, subscription, entitlements, billing (Milestone 3). The auth middleware
-authenticates and populates the principal, but per-route authorization
-(scope/permission enforcement) arrives with T-016. See
-[`docs/TASKS.md`](docs/TASKS.md) for the full plan.
+Not yet implemented: the business modules — catalog, subscription, entitlements,
+billing (Milestone 3). See [`docs/TASKS.md`](docs/TASKS.md) for the full plan.
+(Note: the tenant creator is not yet auto-assigned the `owner` role, so an
+initial role assignment currently has to be bootstrapped out of band — see the
+T-016 follow-up in the tasks doc.)
 
 ## Try it locally
 

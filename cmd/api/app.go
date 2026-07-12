@@ -12,6 +12,7 @@ import (
 
 	"github.com/williamokano/entitlements/internal/app"
 	"github.com/williamokano/entitlements/internal/modules/authentication"
+	"github.com/williamokano/entitlements/internal/modules/authorization"
 	"github.com/williamokano/entitlements/internal/modules/example"
 	"github.com/williamokano/entitlements/internal/modules/tenant"
 	"github.com/williamokano/entitlements/internal/platform/audit"
@@ -58,10 +59,17 @@ func buildApplication(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger
 		IDs:        ids,
 	}
 
+	// The authorization module seeds each new tenant's system roles via a
+	// provisioning hook, so it is built before the tenant module registers hooks.
+	authzMod := authorization.New(deps)
+
 	// The set of business modules. New modules are added here. Each SaaS
 	// registers its tenant provisioning hooks (seed roles, create a trial
 	// subscription, …) alongside the default logging hook.
-	tenantMod := tenant.New(deps, tenant.WithProvisioningHooks(tenant.NewLoggingHook(logger)))
+	tenantMod := tenant.New(deps, tenant.WithProvisioningHooks(
+		tenant.NewLoggingHook(logger),
+		authzMod.SeedRolesHook(),
+	))
 	authMod, err := authentication.New(deps)
 	if err != nil {
 		return nil, fmt.Errorf("build authentication module: %w", err)
@@ -69,6 +77,7 @@ func buildApplication(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger
 	modules := []app.Module{
 		tenantMod,
 		authMod,
+		authzMod,
 		example.New(deps),
 	}
 
