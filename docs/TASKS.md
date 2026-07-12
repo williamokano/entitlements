@@ -534,7 +534,7 @@ paired F-card).
 **Endpoints**: `POST|GET /api/v1/tenants/{id}/invitations`, `POST .../invitations/{invId}/{resend,accept,decline}`, `GET /api/v1/tenants/{id}/members`, `DELETE /api/v1/tenants/{id}/members/{userId}`.
 **Expected tests** (MSW): members table renders and remove confirms first; invite form validates email; accept page drives the accept endpoint then routes onward (sign-in when anonymous).
 
-### F-006 · API keys screen · **S** *(backend: T-014 — merged)*
+### F-006 · API keys screen · **S** · ✅ DONE (PR #27) *(backend: T-014 — merged)*
 **Depends on**: F-001.
 **Screens**: adapt the theme's near-1:1 `apps/api-keys` page — list (prefix, scopes, created/last-used), create modal (name + scopes) with **one-time secret reveal** + copy, revoke with confirm.
 **Endpoints**: `POST|GET /api/v1/api-keys`, `DELETE /api/v1/api-keys/{id}`.

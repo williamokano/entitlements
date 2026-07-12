@@ -1,5 +1,16 @@
-import PlaceholderPage from '@/views/app/components/PlaceholderPage'
+// API keys management — adapted from the theme's apps/api-keys page and wired
+// to the real /api/v1/api-keys endpoints (list, create with one-time secret
+// reveal, revoke). See docs/FRONTEND.md.
+import PageBreadcrumb from '@/components/PageBreadcrumb'
+import ApiKeysCard from './components/ApiKeysCard'
 
-const Page = () => <PlaceholderPage title="API Keys" icon="key" description="API key management (create, one-time secret reveal, revoke) ships with F-006." />
+const Page = () => {
+  return (
+    <>
+      <PageBreadcrumb title="API Keys" subtitle="Organization" />
+      <ApiKeysCard />
+    </>
+  )
+}
 
 export default Page
