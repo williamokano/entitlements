@@ -10,10 +10,11 @@ See [`docs/PLAN.md`](docs/PLAN.md) for the architecture and
 
 ## Status
 
-**Milestones 1 (platform kernel) and 2 (identity) complete.** The API boots,
-runs its migrations on startup, and serves real endpoints.
+**Milestones 1 (platform kernel) and 2 (identity) complete; Milestone 3 (product
+core) in progress.** The API boots, runs its migrations on startup, and serves
+real endpoints.
 
-Implemented (tasks **T-001 – T-016**):
+Implemented (tasks **T-001 – T-017**):
 
 - **Platform kernel** — config, UUIDv7 IDs, clock, Postgres pool + UnitOfWork
   (tx-in-context), migration runner, transactional outbox + relay worker,
@@ -42,11 +43,17 @@ Implemented (tasks **T-001 – T-016**):
   assign/unassign to users, and a `RequirePermission` middleware that enforces
   permissions at the HTTP layer. The same user can hold different roles in
   different tenants.
+- **Catalog** module (`/api/v1/catalog`) — the SaaS operator's product offering
+  (global, not tenant-scoped): plans with immutable published **versions**
+  (publishing freezes a version so existing subscribers are never affected by
+  later changes), per-cycle pricing in integer minor units, trial/grace config,
+  and free-form feature grants. Admin CRUD + an open public plan listing.
 - **Example** module (`/api/v1/example/things`) — a reference tenant-scoped
   slice demonstrating the full hexagonal shape and the outbox → consumer flow.
 
-Not yet implemented: the business modules — catalog, subscription, entitlements,
-billing (Milestone 3). See [`docs/TASKS.md`](docs/TASKS.md) for the full plan.
+Not yet implemented: the remaining business modules — addons, subscription,
+entitlements, billing (Milestone 3). See [`docs/TASKS.md`](docs/TASKS.md) for the
+full plan.
 (Note: the tenant creator is not yet auto-assigned the `owner` role, so an
 initial role assignment currently has to be bootstrapped out of band — see the
 T-016 follow-up in the tasks doc.)
