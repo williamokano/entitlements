@@ -52,7 +52,42 @@ type PlanVersionInfo struct {
 	FeatureGrants map[string]any
 }
 
+// DeltaInfo is an entitlement change an addon applies to a feature key.
+type DeltaInfo struct {
+	FeatureKey string `json:"feature_key"`
+	Kind       string `json:"kind"`
+	Amount     int64  `json:"amount,omitempty"`
+	Value      any    `json:"value,omitempty"`
+}
+
+// AddonVersionInfo is the frozen snapshot of an addon version other modules read
+// (a subscription pins this when attaching the addon).
+type AddonVersionInfo struct {
+	ID                 uuid.UUID
+	AddonID            uuid.UUID
+	AddonKey           string
+	Version            int
+	Status             string
+	Currency           string
+	Prices             []PriceInfo
+	QuantityAllowed    bool
+	CompatiblePlanKeys []string
+	Deltas             []DeltaInfo
+}
+
+// CompatibleWith reports whether the addon version may attach to a plan of
+// planKey. This is the shared compatibility helper other modules reuse.
+func (a AddonVersionInfo) CompatibleWith(planKey string) bool {
+	for _, k := range a.CompatiblePlanKeys {
+		if k == planKey {
+			return true
+		}
+	}
+	return false
+}
+
 // CatalogReader is the catalog module's facade for other modules.
 type CatalogReader interface {
 	GetPlanVersion(ctx context.Context, id uuid.UUID) (PlanVersionInfo, error)
+	GetAddonVersion(ctx context.Context, id uuid.UUID) (AddonVersionInfo, error)
 }

@@ -18,17 +18,37 @@ import (
 
 // Service implements the catalog use cases and ports.CatalogReader.
 type Service struct {
-	uow      *postgres.UnitOfWork
-	outbox   *events.Outbox
-	plans    domain.PlanRepository
-	versions domain.PlanVersionRepository
-	ids      id.Generator
-	clk      clock.Clock
+	uow           *postgres.UnitOfWork
+	outbox        *events.Outbox
+	plans         domain.PlanRepository
+	versions      domain.PlanVersionRepository
+	addons        domain.AddonRepository
+	addonVersions domain.AddonVersionRepository
+	ids           id.Generator
+	clk           clock.Clock
 }
 
 // New builds a Service.
-func New(uow *postgres.UnitOfWork, outbox *events.Outbox, plans domain.PlanRepository, versions domain.PlanVersionRepository, ids id.Generator, clk clock.Clock) *Service {
-	return &Service{uow: uow, outbox: outbox, plans: plans, versions: versions, ids: ids, clk: clk}
+func New(
+	uow *postgres.UnitOfWork,
+	outbox *events.Outbox,
+	plans domain.PlanRepository,
+	versions domain.PlanVersionRepository,
+	addons domain.AddonRepository,
+	addonVersions domain.AddonVersionRepository,
+	ids id.Generator,
+	clk clock.Clock,
+) *Service {
+	return &Service{
+		uow:           uow,
+		outbox:        outbox,
+		plans:         plans,
+		versions:      versions,
+		addons:        addons,
+		addonVersions: addonVersions,
+		ids:           ids,
+		clk:           clk,
+	}
 }
 
 // VersionContent is the editable content of a draft version.
