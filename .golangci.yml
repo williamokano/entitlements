@@ -43,6 +43,10 @@ linters:
             - pkg: github.com/williamokano/entitlements/internal/app
               desc: platform must not depend on the composition layer
   exclusions:
+    # The frontend lives in admin/; a local `npm install` drops vendored Go
+    # files under admin/node_modules that are not ours. Never lint that tree.
+    paths:
+      - admin
     rules:
       # doc.go stubs carry package documentation only.
       - path: doc\.go

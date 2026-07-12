@@ -110,7 +110,7 @@ The product definition: plans, prices, addons, and what features they carry.
 It owns a genuine state machine that is neither "what you get" (entitlements) nor "what you pay" (billing). Keeping it separate keeps both neighbors simple.
 - Create subscription for a tenant against a plan version + billing cycle (with or without trial).
 - **State machine**: `trialing → active → past_due → grace → suspended → canceled | expired`, with guarded transitions and an audit trail of every transition.
-- Current period tracking (start/end, next renewal at), renewal handled via scheduled job emitting `SubscriptionRenewalDue`.
+- Current period tracking (start/end, next renewal at), renewal handled via scheduled job emitting `SubscriptionRenewalDue` exactly once per period (gated by a per-subscription marker, so duplicate ticks / multiple runners don't double-emit). The period advances only when billing confirms payment via an idempotent `billing.invoice_paid` consumer; a `BILLING_DISABLED` flag (default on until the billing module lands) auto-advances so the module is testable standalone. Trials resolve on their own scheduled job (`TrialEnding` a configurable number of days before, then convert-or-expire at the boundary per the plan version's `card_required`).
 - Plan changes: upgrade (immediate) / downgrade (**scheduled change** applied at period end by default), with proration policy delegated to billing.
 - Addon attach/detach (quantity-aware, e.g. extra seats ×3).
 - Cancel (immediate or at period end), reactivate, pause/resume.

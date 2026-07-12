@@ -77,12 +77,16 @@ func buildApplication(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger
 		return nil, fmt.Errorf("build authentication module: %w", err)
 	}
 	catalogMod := catalog.New(deps)
+	subscriptionMod := subscription.New(deps, catalogMod.Port())
+	if err := subscriptionMod.RegisterJobs(deps.Jobs); err != nil {
+		return nil, fmt.Errorf("register subscription jobs: %w", err)
+	}
 	modules := []app.Module{
 		tenantMod,
 		authMod,
 		authzMod,
 		catalogMod,
-		subscription.New(deps, catalogMod.Port()),
+		subscriptionMod,
 		example.New(deps),
 	}
 

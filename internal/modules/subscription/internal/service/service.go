@@ -35,11 +35,29 @@ type Service struct {
 	catalog CatalogReader
 	ids     id.Generator
 	clk     clock.Clock
+
+	// billingDisabled makes renewals auto-advance the period instead of waiting
+	// for an InvoicePaid event (until the billing module lands).
+	billingDisabled bool
+	// trialEndingDays is how many days before trial end the TrialEnding fires.
+	trialEndingDays int
+}
+
+// Config carries the renewal/trial policy knobs.
+type Config struct {
+	BillingDisabled bool
+	TrialEndingDays int
 }
 
 // New builds a Service.
-func New(uow *postgres.UnitOfWork, outbox *events.Outbox, repo domain.Repository, catalog CatalogReader, ids id.Generator, clk clock.Clock) *Service {
-	return &Service{uow: uow, outbox: outbox, repo: repo, catalog: catalog, ids: ids, clk: clk}
+func New(uow *postgres.UnitOfWork, outbox *events.Outbox, repo domain.Repository, catalog CatalogReader, ids id.Generator, clk clock.Clock, cfg Config) *Service {
+	if cfg.TrialEndingDays <= 0 {
+		cfg.TrialEndingDays = 3
+	}
+	return &Service{
+		uow: uow, outbox: outbox, repo: repo, catalog: catalog, ids: ids, clk: clk,
+		billingDisabled: cfg.BillingDisabled, trialEndingDays: cfg.TrialEndingDays,
+	}
 }
 
 // ScheduledChangeView is the read model of a pending plan change.

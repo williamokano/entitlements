@@ -135,6 +135,13 @@ type Subscription struct {
 	TrialEndsAt        *time.Time
 	CancelAtPeriodEnd  bool
 	Scheduled          *ScheduledChange
+	// RenewalEmittedPeriodEnd is the period boundary a SubscriptionRenewalDue was
+	// already emitted for; nil until the first renewal. Gates exactly-once
+	// emission per period.
+	RenewalEmittedPeriodEnd *time.Time
+	// TrialEndingEmitted marks that the pre-expiry TrialEnding event has fired for
+	// the current trial.
+	TrialEndingEmitted bool
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 
@@ -239,6 +246,8 @@ type Repository interface {
 	Update(ctx context.Context, s *Subscription) error
 	GetByID(ctx context.Context, id uuid.UUID) (*Subscription, error)
 	GetLiveForTenant(ctx context.Context, tenantID uuid.UUID) (*Subscription, error)
+	ListRenewable(ctx context.Context, now time.Time) ([]*Subscription, error)
+	ListTrialing(ctx context.Context) ([]*Subscription, error)
 	AppendTransition(ctx context.Context, t *Transition) error
 	ListTransitions(ctx context.Context, subscriptionID uuid.UUID) ([]*Transition, error)
 	AddonRepository

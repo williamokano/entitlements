@@ -52,7 +52,7 @@ func testService(t *testing.T, cat CatalogReader) (*Service, context.Context) {
 		t.Fatalf("Create: %v", err)
 	}
 	// uow and outbox are nil: the paths under test reject before any write.
-	svc := New(nil, nil, &fakeRepo{sub: sub}, cat, id.UUIDv7{}, clock.NewFrozen(time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)))
+	svc := New(nil, nil, &fakeRepo{sub: sub}, cat, id.UUIDv7{}, clock.NewFrozen(time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)), Config{})
 	ctx := authctx.WithTenantID(context.Background(), sub.TenantID)
 	return svc, ctx
 }

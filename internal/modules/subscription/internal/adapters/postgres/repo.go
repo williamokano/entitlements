@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -60,10 +61,12 @@ func (r *Repo) Update(ctx context.Context, s *domain.Subscription) error {
 	_, err := platformpg.Q(ctx, r.pool).Exec(ctx,
 		`UPDATE subscription.subscriptions SET status = $2, current_period_start = $3, current_period_end = $4,
 			trial_ends_at = $5, cancel_at_period_end = $6, updated_at = $7,
-			plan_version_id = $8, billing_cycle = $9, pending_plan_version_id = $10, pending_billing_cycle = $11
+			plan_version_id = $8, billing_cycle = $9, pending_plan_version_id = $10, pending_billing_cycle = $11,
+			renewal_emitted_period_end = $12, trial_ending_emitted = $13
 		 WHERE id = $1`,
 		s.ID, string(s.Status), s.CurrentPeriodStart, s.CurrentPeriodEnd, s.TrialEndsAt, s.CancelAtPeriodEnd, s.UpdatedAt,
-		s.PlanVersionID, string(s.BillingCycle), pendingPV, pendingCycle)
+		s.PlanVersionID, string(s.BillingCycle), pendingPV, pendingCycle,
+		s.RenewalEmittedPeriodEnd, s.TrialEndingEmitted)
 	if err != nil {
 		return fmt.Errorf("subscription: update: %w", err)
 	}
@@ -120,7 +123,15 @@ func (r *Repo) ListTransitions(ctx context.Context, subscriptionID uuid.UUID) ([
 	return out, nil
 }
 
-func (r *Repo) scanOne(ctx context.Context, where string, args ...any) (*domain.Subscription, error) {
+// subscriptionColumns is the shared SELECT list; scanRow decodes exactly it.
+const subscriptionColumns = `id, tenant_id, plan_version_id, billing_cycle, status, current_period_start, current_period_end, trial_ends_at, cancel_at_period_end, pending_plan_version_id, pending_billing_cycle, renewal_emitted_period_end, trial_ending_emitted, created_at, updated_at`
+
+// rowScanner is satisfied by both pgx.Row and pgx.Rows.
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanRow(row rowScanner) (*domain.Subscription, error) {
 	var (
 		s            domain.Subscription
 		cycle        string
@@ -128,15 +139,10 @@ func (r *Repo) scanOne(ctx context.Context, where string, args ...any) (*domain.
 		pendingPV    *uuid.UUID
 		pendingCycle *string
 	)
-	err := platformpg.Q(ctx, r.pool).QueryRow(ctx,
-		`SELECT id, tenant_id, plan_version_id, billing_cycle, status, current_period_start, current_period_end, trial_ends_at, cancel_at_period_end, pending_plan_version_id, pending_billing_cycle, created_at, updated_at
-		 FROM subscription.subscriptions `+where, args...).
-		Scan(&s.ID, &s.TenantID, &s.PlanVersionID, &cycle, &status, &s.CurrentPeriodStart, &s.CurrentPeriodEnd, &s.TrialEndsAt, &s.CancelAtPeriodEnd, &pendingPV, &pendingCycle, &s.CreatedAt, &s.UpdatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, apperr.NotFound("subscription not found")
-	}
-	if err != nil {
-		return nil, fmt.Errorf("subscription: query: %w", err)
+	if err := row.Scan(&s.ID, &s.TenantID, &s.PlanVersionID, &cycle, &status, &s.CurrentPeriodStart, &s.CurrentPeriodEnd,
+		&s.TrialEndsAt, &s.CancelAtPeriodEnd, &pendingPV, &pendingCycle, &s.RenewalEmittedPeriodEnd, &s.TrialEndingEmitted,
+		&s.CreatedAt, &s.UpdatedAt); err != nil {
+		return nil, err
 	}
 	s.BillingCycle = domain.BillingCycle(cycle)
 	s.Status = domain.State(status)
@@ -144,6 +150,56 @@ func (r *Repo) scanOne(ctx context.Context, where string, args ...any) (*domain.
 		s.Scheduled = &domain.ScheduledChange{PlanVersionID: *pendingPV, BillingCycle: domain.BillingCycle(*pendingCycle)}
 	}
 	return &s, nil
+}
+
+func (r *Repo) scanOne(ctx context.Context, where string, args ...any) (*domain.Subscription, error) {
+	row := platformpg.Q(ctx, r.pool).QueryRow(ctx,
+		`SELECT `+subscriptionColumns+` FROM subscription.subscriptions `+where, args...)
+	s, err := scanRow(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, apperr.NotFound("subscription not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("subscription: query: %w", err)
+	}
+	return s, nil
+}
+
+func (r *Repo) scanMany(ctx context.Context, where string, args ...any) ([]*domain.Subscription, error) {
+	rows, err := platformpg.Q(ctx, r.pool).Query(ctx,
+		`SELECT `+subscriptionColumns+` FROM subscription.subscriptions `+where, args...)
+	if err != nil {
+		return nil, fmt.Errorf("subscription: query: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*domain.Subscription
+	for rows.Next() {
+		s, err := scanRow(rows)
+		if err != nil {
+			return nil, fmt.Errorf("subscription: scan: %w", err)
+		}
+		out = append(out, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("subscription: iterate: %w", err)
+	}
+	return out, nil
+}
+
+// ListRenewable returns live subscriptions whose current period has ended and
+// for which a renewal has not yet been emitted for the current period boundary.
+func (r *Repo) ListRenewable(ctx context.Context, now time.Time) ([]*domain.Subscription, error) {
+	return r.scanMany(ctx,
+		`WHERE status IN ('active', 'past_due', 'grace')
+		   AND current_period_end <= $1
+		   AND (renewal_emitted_period_end IS NULL OR renewal_emitted_period_end < current_period_end)`, now)
+}
+
+// ListTrialing returns every trialing subscription (the trial job filters
+// further in the domain).
+func (r *Repo) ListTrialing(ctx context.Context) ([]*domain.Subscription, error) {
+	return r.scanMany(ctx, `WHERE status = 'trialing'`)
 }
 
 // GetAddon returns one attached addon by (subscription, addon version).
