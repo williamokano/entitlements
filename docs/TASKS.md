@@ -20,6 +20,8 @@ Companion to [`docs/PLAN.md`](./PLAN.md). Each task is sized to be implementable
   4. Migrations live in `migrations/<module>/` and run via the migration runner (and therefore via testkit).
   5. Public behavior documented in the package's doc comment (godoc), not a separate wiki.
   6. The task's **Acceptance criteria** are demonstrably met (each criterion maps to at least one expected test or CI gate).
+  7. **Frontend**: if the task adds or changes user-facing endpoints, the corresponding screens in `admin/` (built per [`docs/FRONTEND.md`](./FRONTEND.md)) are part of the task — shipped in the same PR, or split into a paired **F-task** card created/updated in the same PR and referenced from the backend card so it can be built in parallel. A backend task whose screens are neither shipped nor carded is not done.
+- **Frontend track**: frontend tasks are the **F-cards** (see "Frontend track" below), branch `feat/F-XXX-short-name`, same one-PR-per-task flow. Their CI gates are `npm run lint`, `npm run build` (tsc), and `npm test` (Vitest + React Testing Library + MSW) in `admin/`.
 - **Don't gold-plate**: implement exactly the task's scope. "Out of scope" notes are binding.
 - **Money**: always integer minor units (cents) + currency code. Never floats.
 - **Time**: always through `platform/clock`, UTC. Never `time.Now()` in domain/app code. Time-dependent tests use `clock.Frozen`.
@@ -466,6 +468,94 @@ must be bootstrapped out of band. Wire owner-on-create (or bridge
 
 ---
 
+## Frontend track (F-tasks)
+
+The frontend lives in `admin/` on the **Inspinia v5 React** theme — the
+project's design system. Read [`docs/FRONTEND.md`](./FRONTEND.md) first: it
+holds the theme analysis, the keep-the-demo-on-the-side structure, runtime
+configuration, API-client conventions, and the testing stack (Vitest + RTL +
+MSW). The theme's full demo stays browsable under `/demo/*` as a living
+component reference; our screens are adapted copies under `src/views/app/`.
+
+F-003…F-009 are the **catch-up backlog** for endpoints that shipped before the
+frontend rule (T-010–T-019): each maps to a merged backend task, so they can be
+implemented in parallel — with each other and with backend lanes. From T-020 on,
+new backend tasks carry their frontend per DoD item 7 (in-task or as a new
+paired F-card).
+
+### F-001 · Frontend foundation: runtime config, API client, auth store, app shell, demo aside · **L**
+**Depends on**: backend T-013/T-011 (endpoints exist — already merged). Blocks every other F-task.
+**Deliverables**:
+- Demo preserved on the side: all theme routes re-mounted under `/demo/*` (mechanical prefix pass; demo views untouched); `VITE_ENABLE_DEMO` flag drops the demo bundle from production builds.
+- Runtime config: `public/app-config.js` → `window.__APP_CONFIG__` (`apiBaseUrl`, `tenantMode: header|subdomain`, `tenantSlug`, `appName`, `enableDemo`); typed accessor `src/lib/config.ts` with `import.meta.env.VITE_*` dev fallbacks; branding (`META_DATA`, `AppLogo`) reads from it.
+- API client `src/lib/api.ts`: base-URL prefixing, `Authorization: Bearer`, tenant header per tenant mode, RFC 7807 problem+json → typed `ApiError`, `Idempotency-Key` helper for mutating calls.
+- Real auth store replacing the dummy `useAuth`: access+refresh pair, transparent single retry via `POST /auth/refresh` on 401, hard logout when refresh is rejected (rotation/reuse), `RequireAuth` route wrapper.
+- App shell: `MainLayout` with our own `menuItems` (Dashboard, Tenant, Members, API Keys, Roles, Catalog, Subscription), placeholder pages, demo link.
+- Test setup (Vitest + RTL + MSW) and an `admin/`-path-filtered CI job running lint + build + test.
+**Acceptance criteria**: editing `app-config.js` in a **built** bundle switches backends without rebuilding; anonymous users are redirected to sign-in; demo fully browsable under `/demo`; CI job green.
+**Expected tests**:
+- unit: `config` prefers `window.__APP_CONFIG__`, falls back to `VITE_*` in dev.
+- unit: api client attaches bearer + tenant header (header mode) and parses problem+json into `ApiError{status,title,detail}`.
+- unit: a 401 triggers exactly one refresh-and-retry; a failed refresh clears the session (hard logout).
+- component: `RequireAuth` redirects anonymous to `/auth/sign-in` and renders children when authenticated.
+
+### F-002 · Frontend infra: generic Docker image, nginx, compose, CI publish · **M**
+**Depends on**: F-001.
+**Deliverables**: multi-stage `admin/Dockerfile` (node build → nginx-alpine); entrypoint renders `app-config.js` from env (`API_BASE_URL`, `TENANT_MODE`, `TENANT_SLUG`, `APP_NAME`, `ENABLE_DEMO`, …) via template + `envsubst` then starts nginx — **one generic image, config injected at start, nothing baked in**; `nginx.conf` with SPA history fallback, gzip, immutable asset caching, no-cache on `index.html`/`app-config.js`; `admin` service in `docker-compose.yml` wired to the api service; CI builds the image on PRs and pushes tagged (`sha` + `latest`) images on `main`.
+**Acceptance criteria**: the same image serves two different backends by changing `API_BASE_URL` only; `docker compose up` yields SPA + API + Postgres working together; subdomain tenant mode documented (wildcard DNS/hosts note).
+**Expected tests**:
+- CI smoke: build image, `docker run -e API_BASE_URL=http://smoke-test`, assert `/app-config.js` contains it and `/` serves the SPA (200 + history fallback on a deep link).
+- unit: entrypoint template renders every documented variable with defaults.
+
+### F-003 · Auth screens · **L** *(backend: T-012, T-013 — merged)*
+**Depends on**: F-001.
+**Screens** (adapt `views/auth/basic/*` + `account-settings` security tab): sign-in, sign-up, forgot/reset password (token from URL), email verification (request + confirm + success-mail state), password change, active sessions list + "log out other devices", logout.
+**Endpoints**: `POST /api/v1/auth/{register,login,refresh,logout,verify-email/request,verify-email,password/forgot,password/reset,password/change}`, `GET /api/v1/auth/sessions`, `POST /api/v1/auth/sessions/revoke-others`.
+**Acceptance criteria**: the full journey register → verify → sign-in → change password → revoke other sessions works against the real API; problem+json details render as form/field errors; 429 (login rate limit) shows a friendly retry message.
+**Expected tests** (MSW):
+- sign-in success stores the token pair and redirects to `/`; 401 renders the error inline.
+- sign-up client-side validation (yup) blocks invalid email/short password before any request.
+- reset-password page posts the token from the URL and routes to sign-in on success.
+- sessions page lists sessions; revoke-others calls the endpoint and refreshes the list.
+
+### F-004 · Tenant screens: onboarding, settings, lifecycle · **M** *(backend: T-010, T-011 — merged)*
+**Depends on**: F-001.
+**Screens**: post-signup create-tenant onboarding (no-tenant empty state), tenant settings (name/slug/settings), danger zone (suspend/reactivate/delete with sweetalert2 confirm), tenant switcher in the TopBar (header mode).
+**Endpoints**: `POST /api/v1/tenants`, `GET|PATCH /api/v1/tenants/{id}`, `POST /api/v1/tenants/{id}/{suspend,reactivate}`, `DELETE /api/v1/tenants/{id}`.
+**Expected tests** (MSW): create-tenant success routes to the dashboard and subsequent requests carry the tenant header; settings form round-trips a PATCH; delete requires the confirm dialog; switcher swaps the tenant header.
+
+### F-005 · Members & invitations screens · **M** *(backend: T-015 — merged)*
+**Depends on**: F-001.
+**Screens** (adapt `users/contacts` + `DataTable`): members list with remove, invitations list with invite form (email + role) and resend, and the public invitation accept/decline page.
+**Endpoints**: `POST|GET /api/v1/tenants/{id}/invitations`, `POST .../invitations/{invId}/{resend,accept,decline}`, `GET /api/v1/tenants/{id}/members`, `DELETE /api/v1/tenants/{id}/members/{userId}`.
+**Expected tests** (MSW): members table renders and remove confirms first; invite form validates email; accept page drives the accept endpoint then routes onward (sign-in when anonymous).
+
+### F-006 · API keys screen · **S** *(backend: T-014 — merged)*
+**Depends on**: F-001.
+**Screens**: adapt the theme's near-1:1 `apps/api-keys` page — list (prefix, scopes, created/last-used), create modal (name + scopes) with **one-time secret reveal** + copy, revoke with confirm.
+**Endpoints**: `POST|GET /api/v1/api-keys`, `DELETE /api/v1/api-keys/{id}`.
+**Expected tests** (MSW): create shows the secret exactly once (not re-rendered after close); list renders; revoke removes the row after confirm.
+
+### F-007 · Roles & permissions screens · **M** *(backend: T-016 — merged)*
+**Depends on**: F-001.
+**Screens** (adapt `users/roles`, `role-details`, `permissions`): roles list (system roles badged, not deletable), create/edit role with a `resource:action` permission editor, role details with assignments (assign user, unassign).
+**Endpoints**: `GET|POST /api/v1/roles`, `GET|PATCH|DELETE /api/v1/roles/{id}`, `POST /api/v1/roles/{id}/assignments`, `DELETE /api/v1/roles/{id}/assignments/{userId}`.
+**Expected tests** (MSW): system roles hide delete; create posts the permissions array; a 403 from the permission guard renders an access-denied state, not a crash.
+
+### F-008 · Catalog admin screens · **L** *(backend: T-017, T-018 — merged)*
+**Depends on**: F-001.
+**Screens**: plans list (status, public badge); plan detail with versions timeline; version editor — editable **only while draft** (pricing per cycle in minor units, trial config, grace days, features/limits), publish with immutability warning, archive, public toggle; addons list/detail/versions (entitlement deltas + compatible plans); public pricing preview reusing `pages/pricing` bound to `GET /api/v1/catalog/public`.
+**Endpoints**: the full catalog surface (`/api/v1/catalog/plans...`, `/versions/{vid}`, `/public`, `/addons...`, `/addon-versions/{vid}`).
+**Expected tests** (MSW): editor fields disabled for a published version; publish requires the confirm; pricing preview renders public plans; addon delta rows validate feature keys and integer amounts (minor units — no floats anywhere in the UI layer either).
+
+### F-009 · Subscription screen · **M** *(backend: T-019 — merged)*
+**Depends on**: F-001, F-008 (reuses the plan/pricing picker components).
+**Screens**: a "Billing → Subscription" page: current-subscription card (status chip per state, current period, trial countdown, cancel-at-period-end banner); when none, a subscribe flow (public plan + billing-cycle picker); lifecycle actions **rendered from the state machine** so only legal actions show (cancel immediate/at-period-end modal, pause, resume, reactivate).
+**Endpoints**: `POST|GET /api/v1/subscription`, `POST /api/v1/subscription/{cancel,pause,resume,reactivate}`.
+**Expected tests** (MSW): active shows pause+cancel and not resume; paused shows resume; the cancel modal posts `immediate` true/false correctly; a 409 renders a conflict toast; the empty state shows the plan picker.
+
+---
+
 ## Suggested parallel lanes
 
 | Lane | Tasks in order |
@@ -478,4 +568,5 @@ must be bootstrapped out of band. Wire owner-on-create (or bridge
 | E (product) | T-017 → T-018 → T-020 |
 | F (product) | T-019 → T-021 → T-025 → T-026 → T-027 |
 | G (product) | T-022 → T-023 / T-024 |
+| H (frontend) | F-001 → F-002, then F-003…F-009 in any order (fully parallel with backend lanes) |
 | — final — | T-028 → T-029 |
