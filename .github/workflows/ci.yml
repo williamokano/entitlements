@@ -61,6 +61,75 @@ jobs:
       - name: Test
         run: npm test
 
+  admin-image:
+    name: admin · docker image
+    runs-on: ubuntu-latest
+    needs: changes
+    # Build the image on any PR that touches admin/, and always on main (where
+    # we additionally push the tagged image to GHCR).
+    if: needs.changes.outputs.admin == 'true' || github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        # Only needed for the push on main; PRs (incl. from forks) just build.
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata (tags + labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/admin
+          tags: |
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: admin
+          file: admin/Dockerfile
+          # Push tagged (sha + latest) images only on main; PRs build for
+          # verification without pushing.
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          load: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Smoke test the image
+        # Boot the built image with a distinctive API URL and assert the
+        # runtime config is injected and the SPA serves with history fallback.
+        if: github.ref != 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          IMAGE="$(echo '${{ steps.meta.outputs.tags }}' | head -n1)"
+          docker run -d --name admin-smoke -p 3000:80 \
+            -e API_BASE_URL=http://smoke-test.example "$IMAGE"
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null http://localhost:3000/; then break; fi
+            sleep 1
+          done
+          echo "--- /app-config.js ---"
+          curl -s http://localhost:3000/app-config.js
+          curl -s http://localhost:3000/app-config.js | grep -q 'http://smoke-test.example'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/)" = 200
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/some/deep/route)" = 200
+          docker rm -f admin-smoke
+
   build:
     name: lint · test · build
     runs-on: ubuntu-latest

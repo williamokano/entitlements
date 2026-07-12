@@ -16,5 +16,44 @@ services:
       timeout: 5s
       retries: 10
 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: entitlements-api
+    environment:
+      APP_ENV: development
+      PORT: "8080"
+      DATABASE_URL: postgres://entitlements:entitlements@postgres:5432/entitlements?sslmode=disable
+      LOG_LEVEL: info
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile
+      args:
+        # Drop the vendored Inspinia demo from the production bundle. Set to
+        # "true" to keep it browsable under /demo.
+        VITE_ENABLE_DEMO: "false"
+    container_name: entitlements-admin
+    environment:
+      # One generic image, configured entirely at start. The SPA (running in
+      # the browser) talks to the API on the host's published port, so this is
+      # the host origin, not the compose service name.
+      API_BASE_URL: http://localhost:8080
+      TENANT_MODE: header
+      TENANT_SLUG: ""
+      APP_NAME: Entitlements
+      ENABLE_DEMO: "false"
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
 volumes:
   pgdata:
