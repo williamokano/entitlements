@@ -190,17 +190,19 @@ jobs:
       - name: Smoke test the image
         # The scratch image has no shell; check the binary starts and rejects a
         # bad config fast (it exits non-zero without a reachable database, which
-        # proves the entrypoint runs).
+        # proves the entrypoint runs). Disable errexit: the expected result is a
+        # non-zero `docker run`, which would otherwise abort the step.
         if: github.ref != 'refs/heads/main'
         run: |
-          set -uo pipefail
+          set +e
           IMAGE="$(echo '${{ steps.meta.outputs.tags }}' | head -n1)"
           # No DB reachable → the API must fail to boot (non-zero), not hang.
           timeout 20 docker run --rm -e APP_ENV=development \
-            -e DATABASE_URL='postgres://x:x@127.0.0.1:1/x?sslmode=disable' "$IMAGE"; code=$?
+            -e DATABASE_URL='postgres://x:x@127.0.0.1:1/x?sslmode=disable' "$IMAGE"
+          code=$?
           # 0 would mean it booted without a DB (wrong); 124 = timeout (hung).
           if [ "$code" = "0" ] || [ "$code" = "124" ]; then
-            echo "unexpected exit code $code"; exit 1
+            echo "unexpected exit code $code (0=booted without DB, 124=hung)"; exit 1
           fi
           echo "api image starts and exits non-zero without a database (code $code) — OK"
 
