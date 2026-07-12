@@ -42,6 +42,14 @@ type Config struct {
 	// tracing/metrics are created but not exported (no-op).
 	ServiceName  string `env:"OTEL_SERVICE_NAME" envDefault:"entitlements"`
 	OTLPEndpoint string `env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
+
+	// BillingDisabled short-circuits the money side: renewals auto-advance the
+	// subscription period instead of waiting for an InvoicePaid event. Defaults
+	// to true until the billing module (T-025/026) lands.
+	BillingDisabled bool `env:"BILLING_DISABLED" envDefault:"true"`
+	// TrialEndingDays is how many days before a trial ends the TrialEnding event
+	// fires.
+	TrialEndingDays int `env:"SUBSCRIPTION_TRIAL_ENDING_DAYS" envDefault:"3"`
 }
 
 // IsProduction reports whether the configuration targets production.

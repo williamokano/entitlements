@@ -61,6 +61,60 @@ type SubscriptionAddonChanged struct {
 	Quantity       int       `json:"quantity"`
 }
 
+// EventSubscriptionRenewalDue is published when a subscription's period ends and
+// it is time to bill the next period. Billing consumes it to issue an invoice;
+// exactly one is emitted per period.
+const EventSubscriptionRenewalDue = "subscription.renewal_due"
+
+// SubscriptionRenewalDue is the payload of EventSubscriptionRenewalDue.
+type SubscriptionRenewalDue struct {
+	SubscriptionID uuid.UUID `json:"subscription_id"`
+	TenantID       uuid.UUID `json:"tenant_id"`
+	PlanVersionID  uuid.UUID `json:"plan_version_id"`
+	BillingCycle   string    `json:"billing_cycle"`
+	PeriodEnd      time.Time `json:"period_end"`
+}
+
+// EventSubscriptionTrialEnding is published a configured number of days before a
+// trial ends.
+const EventSubscriptionTrialEnding = "subscription.trial_ending"
+
+// SubscriptionTrialEnding is the payload of EventSubscriptionTrialEnding.
+type SubscriptionTrialEnding struct {
+	SubscriptionID uuid.UUID `json:"subscription_id"`
+	TenantID       uuid.UUID `json:"tenant_id"`
+	TrialEndsAt    time.Time `json:"trial_ends_at"`
+}
+
+// EventSubscriptionTrialEnded is published when a trial reaches its end and is
+// resolved (converted to active or expired per the plan's trial config).
+const EventSubscriptionTrialEnded = "subscription.trial_ended"
+
+// Trial-ended outcomes.
+const (
+	TrialConverted = "converted"
+	TrialExpired   = "expired"
+)
+
+// SubscriptionTrialEnded is the payload of EventSubscriptionTrialEnded.
+type SubscriptionTrialEnded struct {
+	SubscriptionID uuid.UUID `json:"subscription_id"`
+	TenantID       uuid.UUID `json:"tenant_id"`
+	Outcome        string    `json:"outcome"` // converted | expired
+}
+
+// EventBillingInvoicePaid is the billing event the subscription module consumes
+// to advance a subscription's period when billing is enabled. Billing owns this
+// event; the name and minimal shape are declared here until the billing module
+// (T-025/026) lands and publishes it.
+const EventBillingInvoicePaid = "billing.invoice_paid"
+
+// BillingInvoicePaid is the (partial) payload the subscription module reads from
+// an invoice-paid event.
+type BillingInvoicePaid struct {
+	SubscriptionID uuid.UUID `json:"subscription_id"`
+}
+
 // SubscriptionInfo is the read model other modules see.
 type SubscriptionInfo struct {
 	ID                 uuid.UUID

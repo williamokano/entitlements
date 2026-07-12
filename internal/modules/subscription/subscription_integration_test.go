@@ -46,9 +46,10 @@ func newDeps(t *testing.T) app.Deps {
 // fakeCatalog returns a canned published plan version for any id. Prices can
 // vary per version id (upgrade/downgrade tests); unlisted ids cost 1000/month.
 type fakeCatalog struct {
-	trialDays int
-	amounts   map[uuid.UUID]int64
-	addons    map[uuid.UUID]catalogports.AddonVersionInfo
+	trialDays    int
+	cardRequired bool
+	amounts      map[uuid.UUID]int64
+	addons       map[uuid.UUID]catalogports.AddonVersionInfo
 }
 
 func (f fakeCatalog) GetPlanVersion(_ context.Context, id uuid.UUID) (catalogports.PlanVersionInfo, error) {
@@ -60,7 +61,7 @@ func (f fakeCatalog) GetPlanVersion(_ context.Context, id uuid.UUID) (catalogpor
 		ID: id, PlanID: uuid.New(), PlanKey: "pro", Version: 1, Status: "published",
 		Currency:     "USD",
 		Prices:       []catalogports.PriceInfo{{Cycle: "monthly", AmountMinor: amount}},
-		TrialEnabled: f.trialDays > 0, TrialDays: f.trialDays,
+		TrialEnabled: f.trialDays > 0, TrialDays: f.trialDays, CardRequired: f.cardRequired,
 	}, nil
 }
 
