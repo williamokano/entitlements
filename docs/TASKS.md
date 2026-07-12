@@ -271,8 +271,12 @@ graph TD
 - `TestRemoveMemberEmitsMemberLeftAndRevokesAccess`.
 - `TestMembershipReaderPortReturnsRoleRef`.
 
-### T-016 · Authorization module (dynamic RBAC) · **M**
+### T-016 · Authorization module (dynamic RBAC) · **M** · ✅ DONE (PR #19)
 **Depends on**: T-010, T-014. **Spec**: PLAN.md §3.
+**Follow-up**: the tenant creator is not yet auto-assigned the `owner` role
+(tenant creation does not capture a creating user), so the first role assignment
+must be bootstrapped out of band. Wire owner-on-create (or bridge
+`tenant.member.joined` role names → assignments) in a later task.
 **Deliverables**: `Role` (tenant-scoped, name, permissions `[]string` as `resource:action`, `system bool`); seed `owner/admin/member` via a provisioning hook; role CRUD (system roles immutable); assign/unassign to members; `ports.Authorizer.Check(ctx, permission)` + `RequirePermission(perm)` middleware with `resource:*` wildcard; replaceable behind port.
 **Acceptance criteria**: roles are data (create at runtime, no deploy); same user can hold different roles in different tenants; system roles undeletable; permission checks enforce at the HTTP layer.
 **Expected tests**:

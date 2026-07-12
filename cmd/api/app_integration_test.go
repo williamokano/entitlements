@@ -168,6 +168,30 @@ func TestAPIKeyManagementAndMachineAuthE2E(t *testing.T) {
 	}
 }
 
+func TestTenantProvisioningSeedsSystemRolesThroughOutbox(t *testing.T) {
+	a := testApp(t)
+	srv := httptest.NewServer(a.handler)
+	defer srv.Close()
+	ctx := context.Background()
+
+	tenantID := createTenant(t, srv.URL, "rbacco")
+
+	// The tenant.created event drives the authorization seed hook via the relay.
+	if _, err := a.relay.ProcessBatch(ctx); err != nil {
+		t.Fatalf("relay: %v", err)
+	}
+
+	var count int
+	if err := a.pool.QueryRow(ctx,
+		`SELECT count(*) FROM authz.roles WHERE tenant_id = $1 AND system AND name IN ('owner','admin','member')`,
+		tenantID).Scan(&count); err != nil {
+		t.Fatalf("query roles: %v", err)
+	}
+	if count != 3 {
+		t.Fatalf("seeded system roles = %d, want 3 (owner/admin/member)", count)
+	}
+}
+
 func TestCompositionRootBootsAndServesHealthz(t *testing.T) {
 	a := testApp(t)
 	srv := httptest.NewServer(a.handler)
