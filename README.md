@@ -115,9 +115,14 @@ Implemented (tasks **T-001 – T-023**):
   (change password, active-sessions list with "log out other devices", resend
   verification) and a real logout in the TopBar user menu. The **API keys**
   screen is also live (`/api-keys`: list, create with a one-time secret reveal,
-  revoke — F-006); the remaining module screens (tenants, members, roles,
-  catalog, subscription) are placeholder pages until their **F-track** cards
-  land — see [`docs/FRONTEND.md`](docs/FRONTEND.md).
+  revoke — F-006). **Tenant** screens are live too (F-004): create-tenant
+  onboarding (no-tenant empty state), settings at `/tenant` (name/settings edit,
+  suspend/reactivate/delete with a confirm), and a **tenant switcher** in the
+  TopBar — the api client sends the selected tenant's id as `X-Tenant-ID` (over a
+  locally-persisted "known tenants" store, since there is no list-my-tenants
+  endpoint yet). The remaining module screens (members, roles, catalog,
+  subscription) are placeholder pages until their **F-track** cards land — see
+  [`docs/FRONTEND.md`](docs/FRONTEND.md).
 
 The admin SPA also ships as a **generic Docker image** (F-002): one image built
 once, configured entirely at container start via environment variables (API URL,

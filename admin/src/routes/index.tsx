@@ -1,6 +1,7 @@
 import { lazy } from 'react'
 import { Navigate, type RouteObject } from 'react-router'
 import RequireAuth from '@/components/RequireAuth'
+import RequireTenant from '@/components/RequireTenant'
 import MainLayout from '@/layouts/MainLayout'
 
 // Real product routes live at "/". Screens are adapted copies of theme pages
@@ -10,13 +11,16 @@ const appRoutes: RouteObject[] = [
   {
     element: (
       <RequireAuth>
-        <MainLayout />
+        <RequireTenant>
+          <MainLayout />
+        </RequireTenant>
       </RequireAuth>
     ),
     children: [
       { path: '/', element: <Navigate to="/dashboard" replace /> },
       { path: '/dashboard', Component: lazy(() => import('@/views/app/dashboard')) },
       { path: '/tenant', Component: lazy(() => import('@/views/app/tenant')) },
+      { path: '/tenant/new', Component: lazy(() => import('@/views/app/tenant/new')) },
       { path: '/members', Component: lazy(() => import('@/views/app/members')) },
       { path: '/api-keys', Component: lazy(() => import('@/views/app/api-keys')) },
       { path: '/roles', Component: lazy(() => import('@/views/app/roles')) },
