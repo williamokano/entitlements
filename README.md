@@ -18,7 +18,7 @@ conventions.
 core) in progress.** The API boots, runs its migrations on startup, and serves
 real endpoints.
 
-Implemented (tasks **T-001 – T-022**):
+Implemented (tasks **T-001 – T-023**):
 
 - **Platform kernel** — config, UUIDv7 IDs, clock, Postgres pool + UnitOfWork
   (tx-in-context), migration runner, transactional outbox + relay worker,
@@ -85,9 +85,19 @@ Implemented (tasks **T-001 – T-022**):
   webhook feed). Runtime reads — `GET /entitlements` (whole set in one call) and
   `GET /entitlements/{key}` — resolve live, so they are never stale; an
   `ENTITLEMENTS_UNKNOWN_FEATURE_POLICY` (`deny` default) governs keys absent from
-  the registry. Overrides CRUD (T-023) and usage/consume (T-024) are the next
-  cards. (Registry admin CRUD is service-level for now; the runtime HTTP surface
-  is the two GETs.)
+  the registry. **Tenant overrides** (T-023) are managed under
+  `POST /entitlements/overrides` + `GET /overrides` + `GET|PATCH|DELETE
+  /overrides/{id}`: an override sets a feature's effective value outright (it wins
+  over plan + addons), carries a mandatory **reason + actor** (actor taken from the
+  signed-in principal) so every create/update/delete is written to the audit log,
+  and may be **time-bound** via `expires_at` — a recurring expiry job reverts and
+  prunes expired overrides (resolution ignores them the instant they lapse, so
+  live reads never serve a stale boost), and the `GET /entitlements` response
+  surfaces `expires_at` when the winning value is a time-bound override. Every
+  override change re-materializes the tenant's effective set (emitting
+  `EntitlementsSummaryChanged`) in the same transaction as the write + audit.
+  Usage/consume (T-024) is the next card. (Registry admin CRUD is service-level
+  for now; the runtime HTTP surface is the GETs plus overrides CRUD.)
 - **Example** module (`/api/v1/example/things`) — a reference tenant-scoped
   slice demonstrating the full hexagonal shape and the outbox → consumer flow.
 
@@ -119,10 +129,10 @@ once, configured entirely at container start via environment variables (API URL,
 tenant mode, branding, demo toggle) — see *Running the admin SPA in Docker*
 below. `docker compose up` now brings up Postgres, the API, and the SPA together.
 
-Not yet implemented: entitlements and billing (Milestone 3); the remaining
-frontend module screens (members, roles, catalog, subscription —
-F-005, F-007–F-009). See [`docs/TASKS.md`](docs/TASKS.md) for the full
-plan.
+Not yet implemented: entitlements **usage/consume + quotas** (T-024) and billing
+(the rest of Milestone 3); the remaining frontend module screens (members, roles,
+catalog, subscription, and the entitlements viewer + overrides admin — F-005,
+F-007–F-011). See [`docs/TASKS.md`](docs/TASKS.md) for the full plan.
 (Note: the tenant creator is not yet auto-assigned the `owner` role, so an
 initial role assignment currently has to be bootstrapped out of band — see the
 T-016 follow-up in the tasks doc.)
@@ -186,6 +196,21 @@ curl -s localhost:8080/api/v1/entitlements \
 curl -s localhost:8080/api/v1/entitlements/seats \
   -H 'Authorization: Bearer <access-token>' -H 'X-Tenant-ID: <tenant-uuid>'
 # → {"key":"seats","value":20,"source":"addon"}
+
+# Set a manual override (wins over plan + addons). Reason is mandatory; the actor
+# is taken from the caller's principal. Add "expires_at":"<RFC3339>" to make it
+# time-bound — the expiry job reverts and prunes it once it lapses.
+curl -sX POST localhost:8080/api/v1/entitlements/overrides \
+  -H 'content-type: application/json' \
+  -H 'Authorization: Bearer <access-token>' -H 'X-Tenant-ID: <tenant-uuid>' \
+  -d '{"feature_key":"seats","value":50,"reason":"enterprise negotiation"}'
+# → {"id":"…","feature_key":"seats","value":50,"reason":"…","actor":"…", …}
+curl -s localhost:8080/api/v1/entitlements/seats \
+  -H 'Authorization: Bearer <access-token>' -H 'X-Tenant-ID: <tenant-uuid>'
+# → {"key":"seats","value":50,"source":"override"}
+curl -sX DELETE localhost:8080/api/v1/entitlements/overrides/<override-id> \
+  -H 'Authorization: Bearer <access-token>' -H 'X-Tenant-ID: <tenant-uuid>'
+# → 204; the effective value reverts to plan + addons (20, source "addon")
 ```
 
 Verification and password-reset emails are **logged, not sent** by the dev

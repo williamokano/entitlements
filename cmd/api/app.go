@@ -85,6 +85,9 @@ func buildApplication(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger
 	// Entitlements resolves plan grants + addon deltas + overrides into a tenant's
 	// effective set, reading the catalog and subscription through their ports.
 	entitlementsMod := entitlements.New(deps, catalogMod.Port(), subscriptionMod.Port())
+	if err := entitlementsMod.RegisterJobs(deps.Jobs); err != nil {
+		return nil, fmt.Errorf("register entitlements jobs: %w", err)
+	}
 	modules := []app.Module{
 		tenantMod,
 		authMod,

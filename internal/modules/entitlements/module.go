@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -20,7 +21,12 @@ import (
 	"github.com/williamokano/entitlements/internal/modules/entitlements/ports"
 	subports "github.com/williamokano/entitlements/internal/modules/subscription/ports"
 	"github.com/williamokano/entitlements/internal/platform/events"
+	"github.com/williamokano/entitlements/internal/platform/jobs"
 )
+
+// overrideExpiryInterval is how often the expiry scan runs; per-override due-ness
+// is decided against the clock, so a coarse interval is fine.
+const overrideExpiryInterval = time.Minute
 
 // Module wires the entitlements module from platform dependencies plus the
 // catalog and subscription readers the resolver composes.
@@ -38,9 +44,20 @@ func New(deps app.Deps, catalog service.CatalogReader, subs service.Subscription
 	if deps.Config.EntitlementsUnknownFeaturePolicy == "allow" {
 		policy = domain.UnknownAllow
 	}
-	svc := service.New(deps.UnitOfWork, deps.Outbox, postgres.New(deps.Pool), catalog, subs, deps.IDs, deps.Clock,
+	svc := service.New(deps.UnitOfWork, deps.Outbox, postgres.New(deps.Pool), catalog, subs, deps.Audit, deps.IDs, deps.Clock,
 		service.Config{UnknownFeaturePolicy: policy})
 	return &Module{deps: deps, svc: svc, handler: rest.New(svc)}
+}
+
+// RegisterJobs registers the recurring override-expiry scan on the runner. The
+// composition root calls this; tests may call it against their own runner. The
+// scan reverts and removes overrides whose expires_at has passed and
+// re-materializes the affected tenants.
+func (m *Module) RegisterJobs(runner *jobs.Runner) error {
+	return runner.Register("entitlements.override_expiry", overrideExpiryInterval, func(ctx context.Context) error {
+		_, err := m.svc.ProcessExpiredOverrides(ctx)
+		return err
+	})
 }
 
 // Name is the module's route prefix segment.

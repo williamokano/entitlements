@@ -158,11 +158,12 @@ func scanFeature(row rowScanner) (*domain.Feature, error) {
 	return &f, nil
 }
 
-// ListLiveOverrides returns a tenant's non-expired overrides, keyed by feature.
-// When two rows target the same feature the most recent one wins.
-func (r *Repo) ListLiveOverrides(ctx context.Context, tenantID uuid.UUID, now time.Time) (map[string]any, error) {
+// ListLiveOverrides returns a tenant's non-expired overrides, keyed by feature,
+// each paired with its expiry (nil when it never expires). When two rows target
+// the same feature the most recent one wins.
+func (r *Repo) ListLiveOverrides(ctx context.Context, tenantID uuid.UUID, now time.Time) (map[string]domain.LiveOverride, error) {
 	rows, err := platformpg.Q(ctx, r.pool).Query(ctx,
-		`SELECT feature_key, value FROM entitlements.tenant_overrides
+		`SELECT feature_key, value, expires_at FROM entitlements.tenant_overrides
 		 WHERE tenant_id = $1 AND (expires_at IS NULL OR expires_at > $2)
 		 ORDER BY created_at`, tenantID, now)
 	if err != nil {
@@ -170,20 +171,21 @@ func (r *Repo) ListLiveOverrides(ctx context.Context, tenantID uuid.UUID, now ti
 	}
 	defer rows.Close()
 
-	out := map[string]any{}
+	out := map[string]domain.LiveOverride{}
 	for rows.Next() {
 		var (
-			key    string
-			valRaw []byte
+			key       string
+			valRaw    []byte
+			expiresAt *time.Time
 		)
-		if err := rows.Scan(&key, &valRaw); err != nil {
+		if err := rows.Scan(&key, &valRaw, &expiresAt); err != nil {
 			return nil, fmt.Errorf("entitlements: scan override: %w", err)
 		}
 		var v any
 		if err := json.Unmarshal(valRaw, &v); err != nil {
 			return nil, fmt.Errorf("entitlements: unmarshal override: %w", err)
 		}
-		out[key] = v
+		out[key] = domain.LiveOverride{Value: v, ExpiresAt: expiresAt}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("entitlements: iterate overrides: %w", err)
@@ -245,19 +247,133 @@ func (r *Repo) ReplaceEffective(ctx context.Context, tenantID uuid.UUID, set map
 	return nil
 }
 
-// InsertOverride persists a tenant override. The override CRUD API lands in
-// T-023; this helper exists so tests (and later that API) can seed overrides.
-func (r *Repo) InsertOverride(ctx context.Context, id, tenantID uuid.UUID, featureKey string, value any, reason, actor string, expiresAt *time.Time, now time.Time) error {
-	val, err := json.Marshal(value)
+const overrideColumns = `id, tenant_id, feature_key, value, reason, actor, expires_at, created_at`
+
+func scanOverride(row rowScanner) (*domain.Override, error) {
+	var (
+		o      domain.Override
+		valRaw []byte
+	)
+	if err := row.Scan(&o.ID, &o.TenantID, &o.FeatureKey, &valRaw, &o.Reason, &o.Actor, &o.ExpiresAt, &o.CreatedAt); err != nil {
+		return nil, err
+	}
+	if len(valRaw) > 0 {
+		if err := json.Unmarshal(valRaw, &o.Value); err != nil {
+			return nil, fmt.Errorf("entitlements: unmarshal override value: %w", err)
+		}
+	}
+	return &o, nil
+}
+
+// InsertOverride persists a new tenant override.
+func (r *Repo) InsertOverride(ctx context.Context, o *domain.Override) error {
+	val, err := json.Marshal(o.Value)
 	if err != nil {
 		return fmt.Errorf("entitlements: marshal override: %w", err)
 	}
 	_, err = platformpg.Q(ctx, r.pool).Exec(ctx,
 		`INSERT INTO entitlements.tenant_overrides (id, tenant_id, feature_key, value, reason, actor, expires_at, created_at)
 		 VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8)`,
-		id, tenantID, featureKey, string(val), reason, actor, expiresAt, now)
+		o.ID, o.TenantID, o.FeatureKey, string(val), o.Reason, o.Actor, o.ExpiresAt, o.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("entitlements: insert override: %w", err)
 	}
 	return nil
+}
+
+// UpdateOverride persists an override's mutable fields (value, reason, actor,
+// expiry). The feature key and tenant are immutable.
+func (r *Repo) UpdateOverride(ctx context.Context, o *domain.Override) error {
+	val, err := json.Marshal(o.Value)
+	if err != nil {
+		return fmt.Errorf("entitlements: marshal override: %w", err)
+	}
+	tag, err := platformpg.Q(ctx, r.pool).Exec(ctx,
+		`UPDATE entitlements.tenant_overrides
+			SET value = $2::jsonb, reason = $3, actor = $4, expires_at = $5
+		 WHERE id = $1`,
+		o.ID, string(val), o.Reason, o.Actor, o.ExpiresAt)
+	if err != nil {
+		return fmt.Errorf("entitlements: update override: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return apperr.NotFound("override not found")
+	}
+	return nil
+}
+
+// GetOverride returns one override scoped to a tenant.
+func (r *Repo) GetOverride(ctx context.Context, tenantID, id uuid.UUID) (*domain.Override, error) {
+	row := platformpg.Q(ctx, r.pool).QueryRow(ctx,
+		`SELECT `+overrideColumns+` FROM entitlements.tenant_overrides WHERE id = $1 AND tenant_id = $2`, id, tenantID)
+	o, err := scanOverride(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, apperr.NotFound("override not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("entitlements: get override: %w", err)
+	}
+	return o, nil
+}
+
+// ListOverrides returns a tenant's overrides (live and expired), newest first.
+func (r *Repo) ListOverrides(ctx context.Context, tenantID uuid.UUID) ([]*domain.Override, error) {
+	rows, err := platformpg.Q(ctx, r.pool).Query(ctx,
+		`SELECT `+overrideColumns+` FROM entitlements.tenant_overrides WHERE tenant_id = $1 ORDER BY created_at DESC`, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("entitlements: list overrides: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*domain.Override
+	for rows.Next() {
+		o, err := scanOverride(rows)
+		if err != nil {
+			return nil, fmt.Errorf("entitlements: scan override: %w", err)
+		}
+		out = append(out, o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("entitlements: iterate overrides: %w", err)
+	}
+	return out, nil
+}
+
+// DeleteOverride removes one override scoped to a tenant, returning NotFound when
+// no row matched.
+func (r *Repo) DeleteOverride(ctx context.Context, tenantID, id uuid.UUID) error {
+	tag, err := platformpg.Q(ctx, r.pool).Exec(ctx,
+		`DELETE FROM entitlements.tenant_overrides WHERE id = $1 AND tenant_id = $2`, id, tenantID)
+	if err != nil {
+		return fmt.Errorf("entitlements: delete override: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return apperr.NotFound("override not found")
+	}
+	return nil
+}
+
+// ListExpiredOverrides returns every override whose expires_at has passed as of
+// now. The expiry job reverts and removes them.
+func (r *Repo) ListExpiredOverrides(ctx context.Context, now time.Time) ([]*domain.Override, error) {
+	rows, err := platformpg.Q(ctx, r.pool).Query(ctx,
+		`SELECT `+overrideColumns+` FROM entitlements.tenant_overrides
+		 WHERE expires_at IS NOT NULL AND expires_at <= $1 ORDER BY tenant_id, created_at`, now)
+	if err != nil {
+		return nil, fmt.Errorf("entitlements: list expired overrides: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*domain.Override
+	for rows.Next() {
+		o, err := scanOverride(rows)
+		if err != nil {
+			return nil, fmt.Errorf("entitlements: scan expired override: %w", err)
+		}
+		out = append(out, o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("entitlements: iterate expired overrides: %w", err)
+	}
+	return out, nil
 }
