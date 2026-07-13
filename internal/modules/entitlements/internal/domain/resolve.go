@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/williamokano/entitlements/internal/platform/apperr"
 )
@@ -44,9 +45,12 @@ type AppliedDelta struct {
 }
 
 // Resolved is a feature's effective value and the layer that produced it.
+// ExpiresAt is set only when the winning layer is a time-bound override, so
+// clients can see when the effective value will revert.
 type Resolved struct {
-	Value  any
-	Source string
+	Value     any
+	Source    string
+	ExpiresAt *time.Time
 }
 
 // ResolveInput is everything the pure resolver composes.
@@ -60,6 +64,10 @@ type ResolveInput struct {
 	AddonDeltas []AppliedDelta
 	// Overrides are the tenant's live (non-expired) overrides, keyed by feature.
 	Overrides map[string]any
+	// OverrideExpiry carries the expires_at of a time-bound override, keyed by
+	// feature. It is optional and only informational: it does not affect which
+	// value wins, only the ExpiresAt surfaced on the resolved entry.
+	OverrideExpiry map[string]*time.Time
 	// Policy governs keys absent from the registry.
 	Policy UnknownPolicy
 }
@@ -130,14 +138,14 @@ func Resolve(in ResolveInput) (map[string]Resolved, error) {
 		f, known := in.Features[key]
 		if !known {
 			if in.Policy == UnknownAllow {
-				out[key] = Resolved{Value: val, Source: SourceOverride}
+				out[key] = Resolved{Value: val, Source: SourceOverride, ExpiresAt: in.OverrideExpiry[key]}
 			}
 			continue
 		}
 		if err := f.ValidateValue(val); err != nil {
 			return nil, err
 		}
-		out[key] = Resolved{Value: val, Source: SourceOverride}
+		out[key] = Resolved{Value: val, Source: SourceOverride, ExpiresAt: in.OverrideExpiry[key]}
 	}
 
 	return out, nil

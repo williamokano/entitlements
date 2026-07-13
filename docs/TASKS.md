@@ -408,17 +408,43 @@ must be bootstrapped out of band. Wire owner-on-create (or bridge
 - integration: `TestEntitlementsSummaryChangedEmittedOnEffectiveSetChange` — a relevant event → exactly one `EntitlementsSummaryChanged` carrying the full re-resolved set; no-op change emits nothing.
 - integration (HTTP): `TestGetAllEntitlementsSingleCall` + `TestGetSingleEntitlement`.
 
-### T-023 · Entitlements: tenant overrides + audit · **M**
+### T-023 · Entitlements: tenant overrides + audit · **M** · ✅ DONE (PR #32)
 **Depends on**: T-022.
-**Deliverables**: override CRUD (feature_key, value or delta, optional `expires_at`, mandatory reason + actor) via admin REST; expiry job re-resolving affected tenants; every change audited; override changes trigger re-materialization.
+**Deliverables**: override CRUD (feature_key, **absolute `value`** — matching how
+T-022's resolver reads overrides; the table has no `delta` column, so overrides
+set the effective value outright at precedence plan < addon < override — optional
+`expires_at`, mandatory reason + actor) via admin REST; expiry job re-resolving
+affected tenants; every change audited; override changes trigger re-materialization.
 **Acceptance criteria**: overrides win over plan+addons; expire on time; are fully audited (who/what/when/why); removal restores the pre-override value.
-**Expected tests** (integration unless noted):
+**Delivered**:
+- REST under `/api/v1/entitlements` (tenant-scoped, auth-required): `POST /overrides`,
+  `GET /overrides`, `GET|PATCH|DELETE /overrides/{id}`. Actor is taken from the
+  authenticated principal (never the body); reason is mandatory. The runtime
+  `GET /entitlements[/{key}]` reads are unchanged except they now surface
+  `expires_at` when the winning value comes from a time-bound override.
+- Create/update/delete each run the override write + a `platform/audit` entry +
+  a re-materialization in **one `UnitOfWork` transaction** (nested `Do` joins the
+  ambient tx), so the override, its audit row, the rebuilt `effective_entitlements`,
+  and the `EntitlementsSummaryChanged` event commit together. Audit actions:
+  `entitlement.override.{created,updated,deleted,expired}`.
+- **Expiry job** `entitlements.override_expiry` (registered via
+  `Module.RegisterJobs`, wired in `cmd/api/app.go`, clock-driven). Decision:
+  **expired overrides are ignored by resolution *and* deleted by the job**, which
+  audits the removal as the `system` actor and re-materializes the affected
+  tenants. Resolution already excludes expired rows, so live reads revert at the
+  instant of expiry; the job then reverts the stored/materialized set and prunes
+  the row.
+- No schema change: the T-022 migration already carries `tenant_overrides`
+  (value/reason/actor/expires_at). No sqlc drift.
+**Expected tests** (integration unless noted) — all implemented and green:
 - `TestOverrideBoostsEffectiveValueImmediately`.
 - `TestOverrideWithoutReasonOrActorRejected` (unit).
 - `TestOverrideExpiryJobRevertsValue` (frozen clock).
 - `TestOverrideDeleteRestoresPlanAddonValue`.
 - `TestOverrideChangesFullyAudited` — create/update/delete each produce an audit entry with reason + actor.
 - `TestTimeBoundOverrideVisibleInEntitlementsResponse` — expiry surfaced to clients.
+**Paired frontend**: override admin UI — see **F-011** below (the T-022 viewer
+F-010 is read-only; overrides CRUD is a new screen).
 
 ### T-024 · Entitlements: usage tracking + quota enforcement · **M**
 **Depends on**: T-022.
@@ -615,6 +641,22 @@ config/enum as their value. A per-feature drill-in reuses `GET
 **Expected tests** (MSW): the table renders the whole set from one call; the
 source badge reflects the winning layer; an empty/no-subscription tenant shows
 only `default`-sourced rows.
+
+### F-011 · Entitlement overrides admin · **S** *(backend: T-023 — merged)*
+**Depends on**: F-010.
+**Screens**: an "override" management surface on the Entitlements page: list the
+tenant's overrides (feature key, value, reason, actor, `expires_at` with a
+"time-bound / expired" indicator), a create modal (feature key, value, mandatory
+reason, optional expiry), edit and delete with confirm. On any mutation the
+effective-entitlements table refreshes so the new winning value + `override`
+source badge (and its `expires_at`) show immediately. Surface validation errors
+(missing reason) inline; actor is implicit (the signed-in principal).
+**Endpoints**: `POST /api/v1/entitlements/overrides`, `GET /api/v1/entitlements/overrides`,
+`GET|PATCH|DELETE /api/v1/entitlements/overrides/{id}`.
+**Expected tests** (MSW): the list renders overrides with a time-bound badge when
+`expires_at` is set; creating without a reason surfaces the 422 inline; a
+successful create refreshes the entitlements table to show the `override` source;
+delete calls the endpoint and the row reverts to plan/addon/default.
 
 ---
 

@@ -5,6 +5,7 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -27,11 +28,14 @@ type EntitlementsSummaryChanged struct {
 	Entitlements map[string]SummaryEntry `json:"entitlements"`
 }
 
-// Entitlement is a single resolved entitlement other modules read.
+// Entitlement is a single resolved entitlement other modules read. ExpiresAt is
+// set only when the effective value comes from a time-bound override, so callers
+// can see when it will revert.
 type Entitlement struct {
-	Key    string
-	Value  any
-	Source string
+	Key       string
+	Value     any
+	Source    string
+	ExpiresAt *time.Time
 }
 
 // EntitlementsReader is the entitlements module's facade for other modules: the

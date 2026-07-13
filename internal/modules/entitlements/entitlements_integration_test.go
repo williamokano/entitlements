@@ -22,6 +22,7 @@ import (
 	"github.com/williamokano/entitlements/internal/modules/entitlements/internal/service"
 	subports "github.com/williamokano/entitlements/internal/modules/subscription/ports"
 	"github.com/williamokano/entitlements/internal/platform/apperr"
+	"github.com/williamokano/entitlements/internal/platform/audit"
 	"github.com/williamokano/entitlements/internal/platform/authctx"
 	"github.com/williamokano/entitlements/internal/platform/clock"
 	"github.com/williamokano/entitlements/internal/platform/events"
@@ -40,6 +41,7 @@ func newDeps(t *testing.T) app.Deps {
 		UnitOfWork: postgres.NewUnitOfWork(pool),
 		Outbox:     events.NewOutbox(pool, ids, clk),
 		Bus:        events.NewBus(),
+		Audit:      audit.NewWriter(pool, ids, clk),
 		Logger:     slog.New(slog.NewJSONHandler(io.Discard, nil)),
 		Clock:      clk,
 		IDs:        ids,
