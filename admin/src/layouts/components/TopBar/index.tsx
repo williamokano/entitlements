@@ -23,6 +23,8 @@ import ThemeToggler from './components/ThemeToggler'
 
 import SimpleUserDropdown from './components/SimpleUserDropdown'
 
+import TenantSwitcher from './components/TenantSwitcher'
+
 const TopBar = () => {
   const { scrollY } = useScrollEvent()
 
@@ -39,6 +41,8 @@ const TopBar = () => {
           <MegamenuApps />
         </div>
         <div className="flex items-center gap-3">
+          <TenantSwitcher />
+
           <ThemeToggler />
 
           <AppsDropdownRounded />
