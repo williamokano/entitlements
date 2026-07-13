@@ -183,8 +183,16 @@ Implemented (tasks **T-001 – T-026**):
   lifecycle actions **gated by the backend state machine** (pay/void/mark
   uncollectible, shown per status), and a credit-note affordance (amount +
   mandatory reason) listing existing credit notes with their negated amounts. The
-  remaining module screens (members, roles) are placeholder pages until their
-  **F-track** cards land — see [`docs/FRONTEND.md`](docs/FRONTEND.md).
+  **entitlements viewer** is live too (F-010, under `/entitlements`): a read-only
+  table of the tenant's effective entitlements (feature key, value, and a source
+  badge naming the winning `default | plan | addon | override` layer) fed by a
+  single `GET /api/v1/entitlements` call — booleans render as on/off chips, limits
+  as numbers, config/enum values verbatim — plus a per-feature drill-in reusing
+  `GET /api/v1/entitlements/{key}` (value, source, and any override expiry). A
+  tenant with no subscription still shows its `default`-sourced rows. Overrides
+  CRUD (F-011) and the usage/quota panel (F-012) extend this page. The remaining
+  module screens (members, roles) are placeholder pages until their **F-track**
+  cards land — see [`docs/FRONTEND.md`](docs/FRONTEND.md).
 
 The admin SPA also ships as a **generic Docker image** (F-002): one image built
 once, configured entirely at container start via environment variables (API URL,
@@ -192,8 +200,8 @@ tenant mode, branding, demo toggle) — see *Running the admin SPA in Docker*
 below. `docker compose up` now brings up Postgres, the API, and the SPA together.
 
 Not yet implemented: the rest of **billing** — dunning + proration (T-027); the
-remaining frontend module screens (members, roles, the entitlements viewer,
-overrides admin, and the usage/quota panel — F-005, F-007, F-010–F-012). See
+remaining frontend module screens (members, roles, the overrides admin, and the
+usage/quota panel — F-005, F-007, F-011, F-012). See
 [`docs/TASKS.md`](docs/TASKS.md) for the full plan.
 (Note: the tenant creator is not yet auto-assigned the `owner` role, so an
 initial role assignment currently has to be bootstrapped out of band — see the
