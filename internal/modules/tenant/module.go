@@ -46,10 +46,13 @@ func WithProvisioningHooks(hooks ...ports.ProvisioningHook) Option {
 // New constructs the tenant module.
 func New(deps app.Deps, opts ...Option) *Module {
 	repo := pgadapter.New(deps.Pool)
-	svc := service.New(deps.UnitOfWork, deps.Outbox, repo, deps.IDs, deps.Clock)
+	memberRepo := pgadapter.NewMemberships(deps.Pool)
+	// Create() makes the creating user the tenant's owner, so the tenant service
+	// writes memberships too — in the same transaction as the tenant itself.
+	svc := service.New(deps.UnitOfWork, deps.Outbox, repo, memberRepo, deps.IDs, deps.Clock)
 	members := service.NewMembershipService(
 		deps.UnitOfWork, deps.Outbox,
-		pgadapter.NewMemberships(deps.Pool), pgadapter.NewInvitations(deps.Pool),
+		memberRepo, pgadapter.NewInvitations(deps.Pool),
 		deps.IDs, deps.Clock, defaultInvitationTTL,
 	)
 	m := &Module{deps: deps, svc: svc, members: members, handler: rest.New(svc, members)}

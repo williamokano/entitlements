@@ -18,21 +18,37 @@ import (
 
 // Service implements the tenant use cases and the ports.TenantReader facade.
 type Service struct {
-	uow    *postgres.UnitOfWork
-	outbox *events.Outbox
-	repo   domain.Repository
-	ids    id.Generator
-	clk    clock.Clock
+	uow     *postgres.UnitOfWork
+	outbox  *events.Outbox
+	repo    domain.Repository
+	members domain.MembershipRepository
+	ids     id.Generator
+	clk     clock.Clock
 }
 
 // New builds a Service.
-func New(uow *postgres.UnitOfWork, outbox *events.Outbox, repo domain.Repository, ids id.Generator, clk clock.Clock) *Service {
-	return &Service{uow: uow, outbox: outbox, repo: repo, ids: ids, clk: clk}
+func New(uow *postgres.UnitOfWork, outbox *events.Outbox, repo domain.Repository, members domain.MembershipRepository, ids id.Generator, clk clock.Clock) *Service {
+	return &Service{uow: uow, outbox: outbox, repo: repo, members: members, ids: ids, clk: clk}
 }
 
-// Create provisions a new tenant and publishes tenant.created.
-func (s *Service) Create(ctx context.Context, slug, name string, settings map[string]any) (ports.TenantInfo, error) {
-	tenant, err := domain.New(s.ids.New(), slug, name, settings, s.clk.Now().UTC())
+// Creator is the authenticated user creating a tenant.
+//
+// It is optional: tenant creation is an open endpoint (a signup can precede any
+// account), so an anonymous caller creates a tenant with no owner. When there
+// *is* a user, they become its owner — otherwise nobody could administer the
+// tenant they just made, since accepting an invitation would be the only way to
+// ever gain a membership in it.
+type Creator struct {
+	UserID uuid.UUID
+	Email  string
+}
+
+// Create provisions a new tenant and publishes tenant.created. When creator is
+// non-nil, the creator is made an active owner member in the same transaction —
+// tenant, owner membership and event all commit together or not at all.
+func (s *Service) Create(ctx context.Context, slug, name string, settings map[string]any, creator *Creator) (ports.TenantInfo, error) {
+	now := s.clk.Now().UTC()
+	tenant, err := domain.New(s.ids.New(), slug, name, settings, now)
 	if err != nil {
 		return ports.TenantInfo{}, err
 	}
@@ -40,6 +56,32 @@ func (s *Service) Create(ctx context.Context, slug, name string, settings map[st
 	err = s.uow.Do(ctx, func(ctx context.Context) error {
 		if err := s.repo.Create(ctx, tenant); err != nil {
 			return err
+		}
+		if creator != nil {
+			owner := &domain.Membership{
+				ID:        s.ids.New(),
+				TenantID:  tenant.ID,
+				UserID:    creator.UserID,
+				Email:     creator.Email,
+				Role:      domain.RoleOwner,
+				Status:    domain.MemberActive,
+				CreatedAt: now,
+				UpdatedAt: now,
+			}
+			if err := s.members.CreateMembership(ctx, owner); err != nil {
+				return err
+			}
+			// The owner joins like any other member, so consumers of
+			// MemberJoined (seat counts, …) see them too — Accept() is not the
+			// only way into a tenant any more.
+			if _, err := s.outbox.Publish(ctx, events.EventInput{
+				TenantID: tenant.ID,
+				Module:   "tenant",
+				Type:     ports.EventMemberJoined,
+				Payload:  ports.MemberJoined{TenantID: tenant.ID, UserID: owner.UserID, Role: owner.Role},
+			}); err != nil {
+				return err
+			}
 		}
 		_, err := s.outbox.Publish(ctx, events.EventInput{
 			TenantID: tenant.ID,

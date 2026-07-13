@@ -11,6 +11,11 @@ import (
 	"github.com/williamokano/entitlements/internal/platform/apperr"
 )
 
+// RoleOwner is the role given to a tenant's creator. Roles are soft references
+// (names) here — the authorization module owns them as data and seeds
+// owner/admin/member into every new tenant.
+const RoleOwner = "owner"
+
 // MemberStatus is a membership's lifecycle state.
 type MemberStatus string
 
