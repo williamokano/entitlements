@@ -77,8 +77,9 @@ type LineKind string
 
 // Line kinds.
 const (
-	LineKindPlan  LineKind = "plan"
-	LineKindAddon LineKind = "addon"
+	LineKindPlan      LineKind = "plan"
+	LineKindAddon     LineKind = "addon"
+	LineKindProration LineKind = "proration"
 )
 
 // LineItem is a snapshotted charge on an invoice. Every field is a copy taken at
@@ -191,6 +192,21 @@ func (inv *Invoice) Terminal() bool {
 	return inv.Status == StatusPaid || inv.Status == StatusVoid || inv.Status == StatusUncollectible
 }
 
+// PendingProration is a deferred plan-change adjustment (the credit_next_invoice
+// strategy) awaiting the subscription's next invoice, which drains it into a
+// proration line. AmountMinor is signed (positive charge, negative credit).
+type PendingProration struct {
+	ID             uuid.UUID
+	TenantID       uuid.UUID
+	SubscriptionID uuid.UUID
+	Description    string
+	Key            string
+	Version        int
+	AmountMinor    int64
+	Currency       string
+	CreatedAt      time.Time
+}
+
 // Repository persists invoices, their snapshotted line items, credit notes, and
 // the per-tenant number sequences.
 type Repository interface {
@@ -209,4 +225,18 @@ type Repository interface {
 	// ever landing in storage.
 	CreatePaymentMethod(ctx context.Context, pm *PaymentMethod) error
 	ListPaymentMethods(ctx context.Context, tenantID uuid.UUID) ([]*PaymentMethod, error)
+	// CreateDunning opens a dunning schedule for a declined renewal charge.
+	CreateDunning(ctx context.Context, d *Dunning) error
+	// UpdateDunning persists a schedule's status/attempt/next-retry after a retry.
+	UpdateDunning(ctx context.Context, d *Dunning) error
+	// ListDueDunning returns active schedules whose next retry is due at now,
+	// across all tenants (the dunning job scans globally).
+	ListDueDunning(ctx context.Context, now time.Time) ([]*Dunning, error)
+	// CreatePendingProration stores a deferred plan-change adjustment.
+	CreatePendingProration(ctx context.Context, p *PendingProration) error
+	// ListPendingProrations returns a subscription's unapplied deferred prorations.
+	ListPendingProrations(ctx context.Context, subscriptionID uuid.UUID) ([]*PendingProration, error)
+	// MarkProrationsApplied records that the given prorations were drained into an
+	// invoice, so they are never billed twice.
+	MarkProrationsApplied(ctx context.Context, ids []uuid.UUID, invoiceID uuid.UUID) error
 }

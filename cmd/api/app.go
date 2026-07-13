@@ -92,6 +92,9 @@ func buildApplication(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger
 	// Billing snapshots the pinned plan/addon versions and the tenant's live
 	// subscription into invoices, reading the catalog and subscription ports.
 	billingMod := billing.New(deps, catalogMod.Port(), subscriptionMod.Port())
+	if err := billingMod.RegisterJobs(deps.Jobs); err != nil {
+		return nil, fmt.Errorf("register billing jobs: %w", err)
+	}
 	modules := []app.Module{
 		tenantMod,
 		authMod,

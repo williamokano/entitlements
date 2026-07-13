@@ -18,7 +18,7 @@ conventions.
 core) in progress.** The API boots, runs its migrations on startup, and serves
 real endpoints.
 
-Implemented (tasks **T-001 – T-026**):
+Implemented (tasks **T-001 – T-027**):
 
 - **Platform kernel** — config, UUIDv7 IDs, clock, Postgres pool + UnitOfWork
   (tx-in-context), migration runner, transactional outbox + relay worker,
@@ -137,8 +137,21 @@ Implemented (tasks **T-001 – T-026**):
   `billing.payment_failed` on decline (invoice stays open). A duplicate renewal
   delivery yields exactly one charge (idempotent consumer + provider key).
   **Payment methods** are stored **tokens only** — a domain guard and a schema
-  `token_not_pan` CHECK both refuse a raw card number. (Dunning + proration are
-  T-027.)
+  `token_not_pan` CHECK both refuse a raw card number. A declined renewal charge
+  opens a **dunning schedule** (T-027) driven by the jobs runner: it retries the
+  charge at the configured offsets (`BILLING_DUNNING_OFFSETS`, default
+  `1d,3d,7d`), each retry using a new `(invoice, attempt)` idempotency key, and
+  publishes `billing.payment_recovered` when a retry succeeds or
+  `billing.dunning_exhausted` when the schedule is used up. The subscription
+  module consumes these: `billing.payment_failed` moves it `active → past_due`,
+  exhaustion moves it into **grace** (whose length comes from the pinned plan
+  version's grace days) and then to **suspended** once grace elapses, and a
+  recovery returns it to **active**. A mid-period plan change publishes
+  `subscription.plan_changed`, which billing prorates via a selectable
+  **`ProrationStrategy`** (`BILLING_PRORATION_STRATEGY`: `immediate_prorated`
+  (default) issues a prorated invoice line now, `credit_next_invoice` defers the
+  amount to the next invoice, `none` bills nothing) — all with exact integer
+  minor-unit arithmetic.
 - **Example** module (`/api/v1/example/things`) — a reference tenant-scoped
   slice demonstrating the full hexagonal shape and the outbox → consumer flow.
 
@@ -199,9 +212,8 @@ once, configured entirely at container start via environment variables (API URL,
 tenant mode, branding, demo toggle) — see *Running the admin SPA in Docker*
 below. `docker compose up` now brings up Postgres, the API, and the SPA together.
 
-Not yet implemented: the rest of **billing** — dunning + proration (T-027); the
-remaining frontend module screens (members, roles, the overrides admin, and the
-usage/quota panel — F-005, F-007, F-011, F-012). See
+Not yet implemented: the remaining frontend module screens (members, roles, the
+overrides admin, and the usage/quota panel — F-005, F-007, F-011, F-012). See
 [`docs/TASKS.md`](docs/TASKS.md) for the full plan.
 (Note: the tenant creator is not yet auto-assigned the `owner` role, so an
 initial role assignment currently has to be bootstrapped out of band — see the

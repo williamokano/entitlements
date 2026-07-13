@@ -14,6 +14,9 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/williamokano/entitlements/internal/app"
 	"github.com/williamokano/entitlements/internal/modules/billing/internal/adapters/fakeprovider"
@@ -23,7 +26,21 @@ import (
 	"github.com/williamokano/entitlements/internal/modules/billing/ports"
 	subports "github.com/williamokano/entitlements/internal/modules/subscription/ports"
 	"github.com/williamokano/entitlements/internal/platform/events"
+	"github.com/williamokano/entitlements/internal/platform/jobs"
 )
+
+// dunningRetryInterval is how often the background dunning scan wakes; per-retry
+// due-ness is decided against the clock, so a coarse interval is fine.
+const dunningRetryInterval = time.Minute
+
+// defaultDunningOffsets is the fallback retry schedule when none is configured
+// (or the configured value fails to parse): retry 1, 3 and 7 days after the
+// initial failure.
+var defaultDunningOffsets = []time.Duration{
+	1 * 24 * time.Hour,
+	3 * 24 * time.Hour,
+	7 * 24 * time.Hour,
+}
 
 // Module wires the billing module from platform dependencies and the catalog +
 // subscription readers (invoices snapshot the pinned plan/addon versions and read
@@ -58,8 +75,60 @@ func New(deps app.Deps, catalog service.CatalogReader, subs service.Subscription
 	for _, o := range opts {
 		o(&cfg)
 	}
-	svc := service.New(deps.UnitOfWork, deps.Outbox, pgadapter.New(deps.Pool), catalog, subs, service.NoopTaxCalculator{}, cfg.provider, deps.IDs, deps.Clock)
+	offsets := parseDunningOffsets(deps.Config.DunningOffsets)
+	proration := service.NewProrationStrategy(deps.Config.ProrationStrategy)
+	svc := service.New(deps.UnitOfWork, deps.Outbox, pgadapter.New(deps.Pool), catalog, subs,
+		service.NoopTaxCalculator{}, cfg.provider, proration, offsets, deps.IDs, deps.Clock)
 	return &Module{deps: deps, svc: svc, handler: rest.New(svc)}
+}
+
+// parseDunningOffsets turns the configured schedule (Go durations or "Nd" day
+// counts, an optional leading "+" allowed) into offsets from the initial
+// failure. An empty or unparseable configuration falls back to the default
+// 1d,3d,7d schedule so the module always has a sane retry policy.
+func parseDunningOffsets(specs []string) []time.Duration {
+	if len(specs) == 0 {
+		return defaultDunningOffsets
+	}
+	out := make([]time.Duration, 0, len(specs))
+	for _, spec := range specs {
+		spec = strings.TrimSpace(spec)
+		if spec == "" {
+			continue
+		}
+		spec = strings.TrimPrefix(spec, "+")
+		var (
+			d   time.Duration
+			err error
+		)
+		if days, ok := strings.CutSuffix(spec, "d"); ok {
+			n, convErr := strconv.Atoi(days)
+			if convErr != nil {
+				return defaultDunningOffsets
+			}
+			d = time.Duration(n) * 24 * time.Hour
+		} else if d, err = time.ParseDuration(spec); err != nil {
+			return defaultDunningOffsets
+		}
+		out = append(out, d)
+	}
+	if len(out) == 0 {
+		return defaultDunningOffsets
+	}
+	return out
+}
+
+// RegisterJobs registers the recurring dunning retry scan on the runner (when
+// billing is enabled). The composition root calls this; tests may call it
+// against their own runner.
+func (m *Module) RegisterJobs(runner *jobs.Runner) error {
+	if m.deps.Config.BillingDisabled {
+		return nil
+	}
+	return runner.Register("billing.dunning", dunningRetryInterval, func(ctx context.Context) error {
+		_, err := m.svc.ProcessDueDunning(ctx)
+		return err
+	})
 }
 
 // Name is the module's route prefix segment.
@@ -80,14 +149,26 @@ func (m *Module) Subscriptions() []app.Subscription {
 	if m.deps.Config.BillingDisabled {
 		return nil
 	}
-	handler := events.Idempotent("billing", m.deps.Pool, func(ctx context.Context, e events.Event) error {
+	renewal := events.Idempotent("billing", m.deps.Pool, func(ctx context.Context, e events.Event) error {
 		var p subports.SubscriptionRenewalDue
 		if err := json.Unmarshal(e.Payload, &p); err != nil {
 			return err
 		}
 		return m.svc.ChargeForRenewal(ctx, p.TenantID)
 	})
-	return []app.Subscription{{EventType: subports.EventSubscriptionRenewalDue, Handler: handler}}
+	// A mid-period plan change is prorated into an invoice line (or a deferred
+	// pending proration) by the configured strategy.
+	planChanged := events.Idempotent("billing", m.deps.Pool, func(ctx context.Context, e events.Event) error {
+		var p subports.SubscriptionPlanChanged
+		if err := json.Unmarshal(e.Payload, &p); err != nil {
+			return err
+		}
+		return m.svc.ApplyPlanChange(ctx, p.TenantID, p.SubscriptionID, p.OldPlanVersionID, p.NewPlanVersionID, p.OldCycle, p.NewCycle)
+	})
+	return []app.Subscription{
+		{EventType: subports.EventSubscriptionRenewalDue, Handler: renewal},
+		{EventType: subports.EventSubscriptionPlanChanged, Handler: planChanged},
+	}
 }
 
 // AttachPaymentMethod tokenizes and stores a payment method for the tenant in

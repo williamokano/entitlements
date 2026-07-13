@@ -24,8 +24,8 @@ type InvoicePaid struct {
 }
 
 // EventPaymentFailed is published when a renewal charge is declined. The invoice
-// is left open. The subscription module will consume it for dunning
-// (past_due → grace → suspended) in T-027; for now it reports the failure.
+// is left open and a dunning schedule is opened to retry it. The subscription
+// module consumes it to move the subscription active → past_due.
 const EventPaymentFailed = "billing.payment_failed"
 
 // PaymentFailed is the payload of EventPaymentFailed.
@@ -34,6 +34,31 @@ type PaymentFailed struct {
 	TenantID       uuid.UUID `json:"tenant_id"`
 	SubscriptionID uuid.UUID `json:"subscription_id"`
 	Reason         string    `json:"reason"`
+}
+
+// EventPaymentRecovered is published when a dunning retry succeeds mid-schedule:
+// the open invoice is paid and the retry loop stops. The subscription module
+// consumes it to return a past_due/grace subscription to active.
+const EventPaymentRecovered = "billing.payment_recovered"
+
+// PaymentRecovered is the payload of EventPaymentRecovered.
+type PaymentRecovered struct {
+	InvoiceID      uuid.UUID `json:"invoice_id"`
+	TenantID       uuid.UUID `json:"tenant_id"`
+	SubscriptionID uuid.UUID `json:"subscription_id"`
+}
+
+// EventDunningExhausted is published when every scheduled dunning retry has
+// failed: the invoice is left open and no further charges are attempted. The
+// subscription module consumes it to move the subscription into its grace period
+// (and then to suspended when that grace elapses).
+const EventDunningExhausted = "billing.dunning_exhausted"
+
+// DunningExhausted is the payload of EventDunningExhausted.
+type DunningExhausted struct {
+	InvoiceID      uuid.UUID `json:"invoice_id"`
+	TenantID       uuid.UUID `json:"tenant_id"`
+	SubscriptionID uuid.UUID `json:"subscription_id"`
 }
 
 // InvoiceInfo is the read model other modules see.

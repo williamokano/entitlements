@@ -66,10 +66,14 @@ func (s *Service) ChargeForRenewal(ctx context.Context, tenantID uuid.UUID) erro
 }
 
 // publishPaymentFailed emits billing.payment_failed for a declined renewal
-// charge, in the ambient transaction. The invoice is intentionally left open.
+// charge and opens the dunning schedule that will retry the charge, both in one
+// transaction. The invoice is intentionally left open. The dunning schedule is
+// anchored at the failure instant, so its retries are due at the configured
+// offsets from that point regardless of when the scan runs.
 func (s *Service) publishPaymentFailed(ctx context.Context, tenantID uuid.UUID, view View, reason string) error {
+	now := s.clk.Now().UTC()
 	return s.uow.Do(ctx, func(ctx context.Context) error {
-		_, err := s.outbox.Publish(ctx, events.EventInput{
+		if _, err := s.outbox.Publish(ctx, events.EventInput{
 			TenantID: tenantID,
 			Module:   "billing",
 			Type:     billingports.EventPaymentFailed,
@@ -79,8 +83,18 @@ func (s *Service) publishPaymentFailed(ctx context.Context, tenantID uuid.UUID, 
 				SubscriptionID: view.SubscriptionID,
 				Reason:         reason,
 			},
-		})
-		return err
+		}); err != nil {
+			return err
+		}
+		d := domain.NewDunning(s.ids.New(), tenantID, view.ID, view.SubscriptionID, s.dunningOffsets, now)
+		if err := s.repo.CreateDunning(ctx, d); err != nil {
+			return err
+		}
+		// No offsets configured ⇒ the schedule opens already exhausted; report it.
+		if d.Exhausted() {
+			return s.publishDunningExhausted(ctx, d)
+		}
+		return nil
 	})
 }
 
