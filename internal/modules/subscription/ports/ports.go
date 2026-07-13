@@ -115,6 +115,26 @@ type BillingInvoicePaid struct {
 	SubscriptionID uuid.UUID `json:"subscription_id"`
 }
 
+// Billing dunning events the subscription module consumes. Billing owns these
+// events; their names and minimal shapes are declared here (like
+// EventBillingInvoicePaid) so the subscription module reads them without
+// importing the billing package — dunning drives active → past_due → grace →
+// suspended, and a recovery returns the subscription to active.
+const (
+	// EventBillingPaymentFailed moves an active subscription to past_due.
+	EventBillingPaymentFailed = "billing.payment_failed"
+	// EventBillingPaymentRecovered returns a past_due/grace subscription to active.
+	EventBillingPaymentRecovered = "billing.payment_recovered"
+	// EventBillingDunningExhausted moves a past_due subscription into grace.
+	EventBillingDunningExhausted = "billing.dunning_exhausted"
+)
+
+// BillingDunningEvent is the (partial) payload shared by the dunning events the
+// subscription module consumes: it only needs the subscription to route to.
+type BillingDunningEvent struct {
+	SubscriptionID uuid.UUID `json:"subscription_id"`
+}
+
 // SubscriptionInfo is the read model other modules see.
 type SubscriptionInfo struct {
 	ID                 uuid.UUID

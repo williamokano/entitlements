@@ -62,11 +62,11 @@ func (r *Repo) Update(ctx context.Context, s *domain.Subscription) error {
 		`UPDATE subscription.subscriptions SET status = $2, current_period_start = $3, current_period_end = $4,
 			trial_ends_at = $5, cancel_at_period_end = $6, updated_at = $7,
 			plan_version_id = $8, billing_cycle = $9, pending_plan_version_id = $10, pending_billing_cycle = $11,
-			renewal_emitted_period_end = $12, trial_ending_emitted = $13
+			renewal_emitted_period_end = $12, trial_ending_emitted = $13, grace_ends_at = $14
 		 WHERE id = $1`,
 		s.ID, string(s.Status), s.CurrentPeriodStart, s.CurrentPeriodEnd, s.TrialEndsAt, s.CancelAtPeriodEnd, s.UpdatedAt,
 		s.PlanVersionID, string(s.BillingCycle), pendingPV, pendingCycle,
-		s.RenewalEmittedPeriodEnd, s.TrialEndingEmitted)
+		s.RenewalEmittedPeriodEnd, s.TrialEndingEmitted, s.GraceEndsAt)
 	if err != nil {
 		return fmt.Errorf("subscription: update: %w", err)
 	}
@@ -124,7 +124,7 @@ func (r *Repo) ListTransitions(ctx context.Context, subscriptionID uuid.UUID) ([
 }
 
 // subscriptionColumns is the shared SELECT list; scanRow decodes exactly it.
-const subscriptionColumns = `id, tenant_id, plan_version_id, billing_cycle, status, current_period_start, current_period_end, trial_ends_at, cancel_at_period_end, pending_plan_version_id, pending_billing_cycle, renewal_emitted_period_end, trial_ending_emitted, created_at, updated_at`
+const subscriptionColumns = `id, tenant_id, plan_version_id, billing_cycle, status, current_period_start, current_period_end, trial_ends_at, cancel_at_period_end, pending_plan_version_id, pending_billing_cycle, renewal_emitted_period_end, trial_ending_emitted, grace_ends_at, created_at, updated_at`
 
 // rowScanner is satisfied by both pgx.Row and pgx.Rows.
 type rowScanner interface {
@@ -141,7 +141,7 @@ func scanRow(row rowScanner) (*domain.Subscription, error) {
 	)
 	if err := row.Scan(&s.ID, &s.TenantID, &s.PlanVersionID, &cycle, &status, &s.CurrentPeriodStart, &s.CurrentPeriodEnd,
 		&s.TrialEndsAt, &s.CancelAtPeriodEnd, &pendingPV, &pendingCycle, &s.RenewalEmittedPeriodEnd, &s.TrialEndingEmitted,
-		&s.CreatedAt, &s.UpdatedAt); err != nil {
+		&s.GraceEndsAt, &s.CreatedAt, &s.UpdatedAt); err != nil {
 		return nil, err
 	}
 	s.BillingCycle = domain.BillingCycle(cycle)
@@ -200,6 +200,12 @@ func (r *Repo) ListRenewable(ctx context.Context, now time.Time) ([]*domain.Subs
 // further in the domain).
 func (r *Repo) ListTrialing(ctx context.Context) ([]*domain.Subscription, error) {
 	return r.scanMany(ctx, `WHERE status = 'trialing'`)
+}
+
+// ListGraceExpired returns subscriptions in grace whose grace deadline has
+// passed at now.
+func (r *Repo) ListGraceExpired(ctx context.Context, now time.Time) ([]*domain.Subscription, error) {
+	return r.scanMany(ctx, `WHERE status = 'grace' AND grace_ends_at IS NOT NULL AND grace_ends_at <= $1`, now)
 }
 
 // GetAddon returns one attached addon by (subscription, addon version).

@@ -8,6 +8,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -57,26 +58,38 @@ func (NoopTaxCalculator) Calculate(context.Context, []domain.LineItem, string) (
 
 // Service implements the billing use cases and ports.BillingReader.
 type Service struct {
-	uow      *postgres.UnitOfWork
-	outbox   *events.Outbox
-	repo     domain.Repository
-	catalog  CatalogReader
-	subs     SubscriptionReader
-	tax      TaxCalculator
-	provider PaymentProvider
-	ids      id.Generator
-	clk      clock.Clock
+	uow       *postgres.UnitOfWork
+	outbox    *events.Outbox
+	repo      domain.Repository
+	catalog   CatalogReader
+	subs      SubscriptionReader
+	tax       TaxCalculator
+	provider  PaymentProvider
+	proration ProrationStrategy
+	// dunningOffsets is the retry schedule (offsets from the initial failure) for
+	// a declined renewal charge. An empty schedule exhausts dunning immediately.
+	dunningOffsets []time.Duration
+	ids            id.Generator
+	clk            clock.Clock
 }
 
-// New builds a Service. A nil TaxCalculator defaults to NoopTaxCalculator. The
-// PaymentProvider is required for the charge flow (renewal charges, payment
-// methods) but may be nil for read-only/issuance-only use; the composition root
-// injects the fake provider by default.
-func New(uow *postgres.UnitOfWork, outbox *events.Outbox, repo domain.Repository, catalog CatalogReader, subs SubscriptionReader, tax TaxCalculator, provider PaymentProvider, ids id.Generator, clk clock.Clock) *Service {
+// New builds a Service. A nil TaxCalculator defaults to NoopTaxCalculator and a
+// nil ProrationStrategy defaults to immediate proration. The PaymentProvider is
+// required for the charge flow (renewal charges, dunning, payment methods) but
+// may be nil for read-only/issuance-only use; the composition root injects the
+// fake provider by default. dunningOffsets is the retry schedule for a failed
+// renewal charge.
+func New(uow *postgres.UnitOfWork, outbox *events.Outbox, repo domain.Repository, catalog CatalogReader, subs SubscriptionReader, tax TaxCalculator, provider PaymentProvider, proration ProrationStrategy, dunningOffsets []time.Duration, ids id.Generator, clk clock.Clock) *Service {
 	if tax == nil {
 		tax = NoopTaxCalculator{}
 	}
-	return &Service{uow: uow, outbox: outbox, repo: repo, catalog: catalog, subs: subs, tax: tax, provider: provider, ids: ids, clk: clk}
+	if proration == nil {
+		proration = ImmediateProration{}
+	}
+	return &Service{
+		uow: uow, outbox: outbox, repo: repo, catalog: catalog, subs: subs, tax: tax,
+		provider: provider, proration: proration, dunningOffsets: dunningOffsets, ids: ids, clk: clk,
+	}
 }
 
 // LineView is a read model of a snapshotted line item.
@@ -178,14 +191,37 @@ func (s *Service) Issue(ctx context.Context) (View, error) {
 		})
 	}
 
-	taxMinor, err := s.tax.Calculate(ctx, lines, currency)
-	if err != nil {
-		return View{}, err
-	}
-
 	now := s.clk.Now().UTC()
 	var inv *domain.Invoice
 	err = s.uow.Do(ctx, func(ctx context.Context) error {
+		// Drain any deferred (credit_next_invoice) prorations for this subscription
+		// into proration lines, so a plan change credited to the next invoice lands
+		// here exactly once.
+		pending, err := s.repo.ListPendingProrations(ctx, sub.ID)
+		if err != nil {
+			return err
+		}
+		drained := make([]uuid.UUID, 0, len(pending))
+		for _, p := range pending {
+			pos++
+			lines = append(lines, domain.LineItem{
+				ID:             s.ids.New(),
+				Kind:           domain.LineKindProration,
+				Description:    p.Description,
+				Key:            p.Key,
+				Version:        p.Version,
+				UnitPriceMinor: p.AmountMinor,
+				Quantity:       1,
+				Currency:       p.Currency,
+				Position:       pos,
+			})
+			drained = append(drained, p.ID)
+		}
+
+		taxMinor, err := s.tax.Calculate(ctx, lines, currency)
+		if err != nil {
+			return err
+		}
 		number, err := s.repo.NextNumber(ctx, tenantID, "invoice")
 		if err != nil {
 			return err
@@ -197,7 +233,10 @@ func (s *Service) Issue(ctx context.Context) (View, error) {
 		if err := inv.Apply(domain.EventOpen, now); err != nil {
 			return err
 		}
-		return s.repo.CreateInvoice(ctx, inv)
+		if err := s.repo.CreateInvoice(ctx, inv); err != nil {
+			return err
+		}
+		return s.repo.MarkProrationsApplied(ctx, drained, inv.ID)
 	})
 	if err != nil {
 		return View{}, err

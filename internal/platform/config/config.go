@@ -61,6 +61,18 @@ type Config struct {
 	// fires.
 	TrialEndingDays int `env:"SUBSCRIPTION_TRIAL_ENDING_DAYS" envDefault:"3"`
 
+	// DunningOffsets is the retry schedule for a failed renewal charge, as offsets
+	// from the initial failure. Each entry is a Go duration or an "Nd" day count
+	// (an optional leading "+" is allowed), e.g. "1d,3d,7d" ⇒ retry the charge 1, 3
+	// and 7 days after it first fails. After the last offset's retry fails, dunning
+	// is exhausted.
+	DunningOffsets []string `env:"BILLING_DUNNING_OFFSETS" envSeparator:"," envDefault:"1d,3d,7d"`
+	// ProrationStrategy selects how a mid-period plan change is billed:
+	// "immediate_prorated" (default) issues a prorated line now, "none" bills
+	// nothing extra, "credit_next_invoice" defers the prorated amount to the next
+	// invoice.
+	ProrationStrategy string `env:"BILLING_PRORATION_STRATEGY" envDefault:"immediate_prorated"`
+
 	// EntitlementsUnknownFeaturePolicy decides how resolution treats a feature key
 	// referenced by a plan/addon/override but absent from the registry: "deny"
 	// (default) drops it, "allow" keeps it.

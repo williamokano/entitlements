@@ -25,6 +25,7 @@ import (
 const (
 	renewalInterval = time.Minute
 	trialInterval   = time.Minute
+	graceInterval   = time.Minute
 )
 
 // Module wires the subscription module from platform dependencies and the
@@ -59,8 +60,14 @@ func (m *Module) RegisterJobs(runner *jobs.Runner) error {
 	}); err != nil {
 		return err
 	}
-	return runner.Register("subscription.trial", trialInterval, func(ctx context.Context) error {
+	if err := runner.Register("subscription.trial", trialInterval, func(ctx context.Context) error {
 		_, _, err := m.svc.ProcessTrials(ctx)
+		return err
+	}); err != nil {
+		return err
+	}
+	return runner.Register("subscription.grace", graceInterval, func(ctx context.Context) error {
+		_, err := m.svc.ProcessGraceExpiries(ctx)
 		return err
 	})
 }
@@ -75,14 +82,43 @@ func (m *Module) Handler() http.Handler { return m.handler }
 // invoice is paid. The handler is idempotent (processed-events guarded), so a
 // redelivered InvoicePaid never double-advances.
 func (m *Module) Subscriptions() []app.Subscription {
-	handler := events.Idempotent("subscription", m.deps.Pool, func(ctx context.Context, e events.Event) error {
+	invoicePaid := events.Idempotent("subscription", m.deps.Pool, func(ctx context.Context, e events.Event) error {
 		var p ports.BillingInvoicePaid
 		if err := json.Unmarshal(e.Payload, &p); err != nil {
 			return err
 		}
 		return m.svc.AdvancePeriodAfterPayment(ctx, p.SubscriptionID)
 	})
-	return []app.Subscription{{EventType: ports.EventBillingInvoicePaid, Handler: handler}}
+	// Dunning drives the subscription lifecycle: a failed charge → past_due, an
+	// exhausted schedule → grace, and a recovered payment → active.
+	paymentFailed := m.dunningConsumer(func(ctx context.Context, subscriptionID uuid.UUID) error {
+		return m.svc.MarkPaymentFailed(ctx, subscriptionID)
+	})
+	dunningExhausted := m.dunningConsumer(func(ctx context.Context, subscriptionID uuid.UUID) error {
+		return m.svc.EnterGraceOnDunningExhausted(ctx, subscriptionID)
+	})
+	paymentRecovered := m.dunningConsumer(func(ctx context.Context, subscriptionID uuid.UUID) error {
+		return m.svc.RecoverPayment(ctx, subscriptionID)
+	})
+	return []app.Subscription{
+		{EventType: ports.EventBillingInvoicePaid, Handler: invoicePaid},
+		{EventType: ports.EventBillingPaymentFailed, Handler: paymentFailed},
+		{EventType: ports.EventBillingDunningExhausted, Handler: dunningExhausted},
+		{EventType: ports.EventBillingPaymentRecovered, Handler: paymentRecovered},
+	}
+}
+
+// dunningConsumer wraps a subscription-side dunning handler as an idempotent
+// consumer that decodes the shared dunning payload (a subscription id) and
+// routes it to fn.
+func (m *Module) dunningConsumer(fn func(ctx context.Context, subscriptionID uuid.UUID) error) events.Handler {
+	return events.Idempotent("subscription", m.deps.Pool, func(ctx context.Context, e events.Event) error {
+		var p ports.BillingDunningEvent
+		if err := json.Unmarshal(e.Payload, &p); err != nil {
+			return err
+		}
+		return fn(ctx, p.SubscriptionID)
+	})
 }
 
 // Port returns the subscription reader other modules use.

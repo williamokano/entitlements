@@ -134,7 +134,12 @@ type Subscription struct {
 	CurrentPeriodEnd   time.Time
 	TrialEndsAt        *time.Time
 	CancelAtPeriodEnd  bool
-	Scheduled          *ScheduledChange
+	// GraceEndsAt is when the dunning grace period ends; nil unless the
+	// subscription is in grace. Its length comes from the pinned plan version's
+	// GraceDays, set when billing's dunning is exhausted. Once it passes, the grace
+	// scan suspends the subscription.
+	GraceEndsAt *time.Time
+	Scheduled   *ScheduledChange
 	// RenewalEmittedPeriodEnd is the period boundary a SubscriptionRenewalDue was
 	// already emitted for; nil until the first renewal. Gates exactly-once
 	// emission per period.
@@ -217,6 +222,28 @@ func (s *Subscription) Terminal() bool {
 	return s.Status == StateCanceled || s.Status == StateExpired
 }
 
+// SetGraceWindow records when the current grace period ends — graceDays after
+// now, taken from the pinned plan version. Call it right after applying the
+// enter-grace transition.
+func (s *Subscription) SetGraceWindow(graceDays int, now time.Time) {
+	end := now.AddDate(0, 0, graceDays)
+	s.GraceEndsAt = &end
+	s.UpdatedAt = now
+}
+
+// ClearGraceWindow drops the grace deadline (on recovery to active, or when the
+// grace period is resolved into suspension).
+func (s *Subscription) ClearGraceWindow(now time.Time) {
+	s.GraceEndsAt = nil
+	s.UpdatedAt = now
+}
+
+// GraceExpired reports whether a subscription in grace has reached its grace
+// deadline and should be suspended.
+func (s *Subscription) GraceExpired(now time.Time) bool {
+	return s.Status == StateGrace && s.GraceEndsAt != nil && !now.Before(*s.GraceEndsAt)
+}
+
 // PendingTransition returns and clears the transition produced by the last
 // Create/Apply, for the service to persist and publish.
 func (s *Subscription) PendingTransition() *Transition {
@@ -248,6 +275,9 @@ type Repository interface {
 	GetLiveForTenant(ctx context.Context, tenantID uuid.UUID) (*Subscription, error)
 	ListRenewable(ctx context.Context, now time.Time) ([]*Subscription, error)
 	ListTrialing(ctx context.Context) ([]*Subscription, error)
+	// ListGraceExpired returns subscriptions in grace whose grace deadline has
+	// passed at now (the grace scan suspends them).
+	ListGraceExpired(ctx context.Context, now time.Time) ([]*Subscription, error)
 	AppendTransition(ctx context.Context, t *Transition) error
 	ListTransitions(ctx context.Context, subscriptionID uuid.UUID) ([]*Transition, error)
 	AddonRepository

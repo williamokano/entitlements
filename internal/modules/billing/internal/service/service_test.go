@@ -29,7 +29,7 @@ func TestTaxCalculatorPortInvokedNoopDefaultZeroTax(t *testing.T) {
 		{Kind: domain.LineKindPlan, Key: "pro", Version: 1, UnitPriceMinor: 1000, Quantity: 1, Currency: "USD"},
 	}
 	rec := &recordingTax{inner: NoopTaxCalculator{}}
-	svc := New(nil, nil, nil, nil, nil, rec, nil, nil, nil)
+	svc := New(nil, nil, nil, nil, nil, rec, nil, nil, nil, nil, nil)
 
 	tax, err := svc.tax.Calculate(context.Background(), lines, "USD")
 	if err != nil {
@@ -49,7 +49,7 @@ func TestTaxCalculatorPortInvokedNoopDefaultZeroTax(t *testing.T) {
 // TestNewDefaultsToNoopTaxCalculator asserts a nil calculator defaults to the
 // no-op (zero tax), so the module is safe to wire without a tax provider.
 func TestNewDefaultsToNoopTaxCalculator(t *testing.T) {
-	svc := New(nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	svc := New(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	tax, err := svc.tax.Calculate(context.Background(), nil, "USD")
 	if err != nil {
 		t.Fatalf("Calculate: %v", err)
