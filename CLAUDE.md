@@ -72,4 +72,6 @@ but whose docs still describe the old world is not finished.
   (API base URL, tenant mode, branding) goes through runtime
   `window.__APP_CONFIG__`, never baked into the bundle. Frontend tests are
   Vitest + React Testing Library + MSW.
-- GitHub access: use the GitHub MCP tools (`mcp__github__*`), not the `gh` CLI.
+- GitHub access: prefer the GitHub MCP tools (`mcp__github__*`) when they are
+  available; fall back to the `gh` CLI when no GitHub MCP server is connected.
+  Don't stall on the preference — the work matters more than the transport.
