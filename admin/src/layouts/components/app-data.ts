@@ -73,6 +73,12 @@ export const appMenuItems: MenuItemType[] = [
         slug: 'app:billing',
         label: 'Invoices',
       },
+      {
+        url: '/entitlements',
+        icon: 'components',
+        slug: 'app:entitlements',
+        label: 'Entitlements',
+      },
     ],
   },
   ...(appConfig().enableDemo

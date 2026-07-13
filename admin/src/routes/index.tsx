@@ -34,6 +34,8 @@ const appRoutes: RouteObject[] = [
       { path: '/subscription', Component: lazy(() => import('@/views/app/subscription')) },
       { path: '/billing', Component: lazy(() => import('@/views/app/billing')) },
       { path: '/billing/invoices/:id', Component: lazy(() => import('@/views/app/billing/detail')) },
+      { path: '/entitlements', Component: lazy(() => import('@/views/app/entitlements')) },
+      { path: '/entitlements/:key', Component: lazy(() => import('@/views/app/entitlements/detail')) },
       { path: '/account/security', Component: lazy(() => import('@/views/app/account/security')) },
     ],
   },
