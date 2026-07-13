@@ -73,6 +73,134 @@ modules/<name>/
 
 **Composition root** (`cmd/api`): `config → observability → Postgres pool → migrations → build `app.Deps` → wire each `app.Module` (mount its handler under `/api/v1/<name>`, register its subscriptions on the bus) → start the outbox relay + job runner → serve`. The `example` module is a bootable reference implementation of this pattern (delete it and `migrations/example/` for a real SaaS).
 
+## System architecture (as built)
+
+These diagrams describe the system **as the code actually is**, not as intended —
+including the places where it is not yet guarded. Planned work is drawn
+separately, below.
+
+### Request path
+
+Every request crosses one middleware chain before any module sees it. Note that
+`authenticate` is **permissive** — a request with no credential passes through
+*unauthenticated* rather than being rejected, so **each surface is responsible for
+its own guard**. That is where the current gaps come from.
+
+```mermaid
+flowchart TB
+    SPA["admin SPA · React<br/>Authorization: Bearer &lt;jwt&gt;"]
+    MACHINE["service / CI<br/>Authorization: ApiKey &lt;key&gt;"]
+    ANON["anonymous caller"]
+
+    SPA --> CHAIN
+    MACHINE --> CHAIN
+    ANON --> CHAIN
+
+    subgraph CHAIN["middleware chain · cmd/api/app.go"]
+        direction TB
+        C1["CORS"] --> C2["RequestID"] --> C3["Tracing · OTel"] --> C4["Recovery"] --> C5["Logging"]
+        C5 --> C6["<b>authenticate</b> · permissive<br/>Bearer → user principal<br/>ApiKey → machine principal + its tenant<br/>none → passes through anonymous"]
+        C6 --> C7["<b>resolveTenant</b> → authctx<br/>claim → X-Tenant-ID → subdomain<br/>exempt: /healthz /api/v1/tenants /api/v1/auth /api/v1/catalog"]
+        C7 --> C8["Idempotency · keyed per tenant"]
+    end
+
+    CHAIN --> ROUTER["router · mounts /api/v1/&lt;module&gt;"]
+
+    ROUTER --> S_TENANT["<b>/api/v1/tenants</b> CRUD<br/>⚠️ NO GUARD — T-034"]
+    ROUTER --> S_MEMBER["/api/v1/tenants/{id}/members · invitations<br/>requireUser"]
+    ROUTER --> S_AUTH["/api/v1/auth<br/>public by design + RequireAuth on session routes"]
+    ROUTER --> S_KEYS["/api/v1/api-keys<br/>RequireAuth · composition root"]
+    ROUTER --> S_ROLES["/api/v1/roles<br/>RequirePermission — but 403s for everyone · T-032"]
+    ROUTER --> S_CATALOG["<b>/api/v1/catalog</b> admin<br/>⚠️ requireAuth only: ANY user can publish plans — T-035"]
+    ROUTER --> S_TENANTED["/api/v1/{subscription,entitlements,billing}<br/>principal + tenant checked"]
+    ROUTER --> S_EXAMPLE["<b>/api/v1/example</b><br/>⚠️ NO GUARD — and it is the module adopters copy · T-033"]
+
+    classDef gap fill:#fdd,stroke:#c00,stroke-width:2px;
+    class S_TENANT,S_CATALOG,S_EXAMPLE gap;
+```
+
+### Module graph
+
+**Solid** = synchronous dependency on another module's public `ports` facade,
+injected at the composition root. **Dashed** = asynchronous event, published to
+the transactional outbox, delivered by the relay to the in-proc bus, and handled
+idempotently. No module imports another module's internals — the compiler forbids
+it.
+
+```mermaid
+flowchart LR
+    CATALOG["<b>catalog</b> · global<br/>the operator's offering<br/>plans · versions · addons"]
+    SUB["<b>subscription</b><br/>tenant pins a plan version<br/>state machine"]
+    ENT["<b>entitlements</b><br/>plan grants + addon deltas<br/>+ overrides → effective set"]
+    BILL["<b>billing</b><br/>invoices · charges · dunning"]
+    TENANT["<b>tenant</b><br/>tenancy · membership · invitations"]
+    AUTHN["<b>authentication</b><br/>users · JWT · refresh · API keys"]
+    AUTHZ["<b>authorization</b><br/>tenant-scoped RBAC"]
+
+    %% synchronous: another module's ports facade, injected at the composition root
+    CATALOG -->|CatalogReader| SUB
+    CATALOG -->|CatalogReader| ENT
+    CATALOG -->|CatalogReader| BILL
+    SUB -->|SubscriptionReader| ENT
+    SUB -->|SubscriptionReader| BILL
+    AUTHZ -->|SeedRolesHook| TENANT
+
+    %% asynchronous: outbox → relay → bus, handled idempotently
+    TENANT -. "tenant.created" .-> TENANT
+    SUB -. "transitioned<br/>plan_changed<br/>addon_changed" .-> ENT
+    SUB -. "renewal_due<br/>plan_changed" .-> BILL
+    BILL -. "invoice_paid · payment_failed<br/>dunning_exhausted · payment_recovered" .-> SUB
+```
+
+Not drawn, to keep the graph legible: every module sits on the **platform kernel**
+(UnitOfWork, outbox + relay, event bus, advisory-locked job runner, audit log) —
+`subscription`, `entitlements` and `billing` each register jobs with it.
+`authentication` supplies the `TokenVerifier` / `APIKeyAuthenticator` to the auth
+middleware, and `tenant` supplies the `TenantReader` to the tenant-resolution
+middleware; both appear in the request-path diagram above.
+
+**The seam that is missing.** `tenant` publishes `member.joined` / `member.left`,
+and `tenant.MembershipPort()` (`ports.MembershipReader`) exists — but **nothing
+consumes either**. `authorization` resolves permissions purely from
+`authz.role_assignments`, and nothing ever writes an assignment, so RBAC cannot
+be bootstrapped (**T-032**). The dotted edge below is the fix.
+
+### Where this is going
+
+```mermaid
+flowchart LR
+    OPERATOR["<b>platform operator</b> · T-033<br/>global admin identity<br/>seeded at boot from config"]
+
+    OPERATOR -. "RequirePlatformPermission" .-> G1["tenant lifecycle<br/>suspend · reactivate · delete<br/>T-034"]
+    OPERATOR -. "RequirePlatformPermission" .-> G2["catalog admin<br/>publish · archive<br/>T-035"]
+
+    MEMBER["<b>tenant member</b><br/>owner · admin · member"]
+    MEMBER -. "RequireTenantMembership" .-> G3["tenant read/update<br/>members · api-keys<br/>subscription · entitlements"]
+    MEMBER -. "adopters guard their own<br/>modules with the same primitive" .-> G4["example → your module<br/>T-033"]
+
+    TEN["tenant"] -. "member.joined / member.left<br/>T-032" .-> AZ["authorization<br/>writes the role assignment"]
+    AZ -. "unblocks" .-> ROLES["/api/v1/roles stops 403ing<br/>for everyone"]
+
+    classDef planned stroke-dasharray: 5 5;
+    class OPERATOR,G1,G2,G3,G4,TEN,AZ,ROLES planned;
+```
+
+Three planned changes, in dependency order:
+
+1. **T-032** — `authorization` subscribes to `tenant.member.joined` and writes the
+   matching role assignment (and unassigns on `member.left`). This closes the
+   membership → permission seam and makes RBAC bootstrappable at all.
+2. **T-033** — introduce the **platform operator** identity. The system has no
+   notion of the SaaS operator as an authenticated actor today, which is *why* the
+   operator surfaces are unguarded: there was nobody to authorize them against.
+   Ships reusable guards (`RequirePlatformPermission`, `RequireTenantMembership`)
+   applied at the composition root — because adopters bring their own
+   tenant-scoped modules, the skeleton must make the secure path the default path.
+3. **T-034 / T-035** — apply them: tenant lifecycle and catalog admin become
+   operator-only; tenant read/update stays tenant self-service. Suspension is the
+   *enforcement* lever, so it must never be a membership check — a tenant that can
+   reactivate itself can undo its own suspension.
+
 ## Module Specifications
 
 ### 1. Tenant

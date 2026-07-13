@@ -71,7 +71,30 @@ graph TD
   T024 --> T028
   T027 --> T028
   T028 --> T029[T-029 seed data + new-SaaS checklist]
+
+  %% Security / identity track — found while building F-005.
+  %% The tenant CRUD surface is unauthenticated today, because the system has no
+  %% notion of the SaaS operator as an authenticated actor to guard it with.
+  T015 --> F005[F-005 members + invitations screens]
+  F005 --> T031[T-031 tenant creator becomes owner-member]
+  T016 --> T032[T-032 RBAC unbootstrappable: nothing assigns a role]
+  T031 --> T032
+  T016 --> T033[T-033 platform operator identity + reusable guards]
+  T012 --> T033
+  T033 --> T034[T-034 split tenant endpoints: self-service vs operator]
+  T031 --> T034
+  T033 --> T035[T-035 guard catalog admin]
+  T033 --> T028
+  T034 --> T028
+
+  classDef security fill:#fdd,stroke:#c00,stroke-width:2px;
+  class T032,T033,T034,T035 security;
 ```
+
+The red track above is the security/identity work uncovered while building F-005:
+the tenant CRUD surface is **unauthenticated today**, and RBAC cannot be
+bootstrapped at all. See T-032 → T-035, and the "Where this is going" diagram in
+[`PLAN.md`](PLAN.md#where-this-is-going).
 
 ---
 
