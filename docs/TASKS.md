@@ -446,7 +446,7 @@ affected tenants; every change audited; override changes trigger re-materializat
 **Paired frontend**: override admin UI — see **F-011** below (the T-022 viewer
 F-010 is read-only; overrides CRUD is a new screen).
 
-### T-024 · Entitlements: usage tracking + quota enforcement · **M** · ✅ DONE (PR #TBD)
+### T-024 · Entitlements: usage tracking + quota enforcement · **M** · ✅ DONE (PR #36)
 **Depends on**: T-022.
 **Deliverables**: usage counters per (tenant, feature, period); `ConsumeQuota(ctx, key, n)` — single-statement atomic check-and-increment honoring hard limits (typed `QuotaExceeded`) and soft limits (consume + `EntitlementLimitWarning` event); `ReleaseQuota`, `GetUsage`; lazy period reset per feature `reset_period`; downgrade grace: shrunk limit below usage ⇒ `EntitlementExceeded` event, never blocks reads; REST consume/usage endpoints.
 **Acceptance criteria**: hard limits are never exceeded even under maximal concurrency; soft limits warn exactly once per crossing; period reset needs no background job; downgrade never breaks a tenant.
@@ -459,7 +459,7 @@ F-010 is read-only; overrides CRUD is a new screen).
 - unit: `TestConsumeValidation` — n<=0 rejected; unknown feature per policy.
 - integration (HTTP): `TestConsumeEndpointAndUsageEndpoint` — 200 consume, 409/422 on exceeded (typed problem+json).
 
-**Note (implemented, PR #TBD)**: usage counters live in `entitlements.usage_counters`
+**Note (implemented, PR #36)**: usage counters live in `entitlements.usage_counters`
 keyed by `(tenant_id, feature_key, period_key)`; `period_key` is derived lazily
 from the feature's `reset_period` (`never` | `YYYY-MM` for monthly | the
 subscription's current-period start for `billing_cycle`), so a new period is a
