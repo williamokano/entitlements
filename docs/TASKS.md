@@ -321,14 +321,16 @@ duplicate slug), `TestCreatingATenantAnonymouslyStillWorksAndHasNoMembers`.
 >
 > The stricter alternative is to **require authentication on `POST
 > /api/v1/tenants`**, so every tenant provably has an owner and the ownerless
-> state becomes unrepresentable. That is the cleaner invariant, but it is a
-> **breaking API change** — it would 401 the anonymous path, and needs the README
-> and the e2e/integration tests updated with it.
+> state becomes unrepresentable. That is the cleaner invariant, and T-028's own
+> acceptance test ("register → create tenant") already assumes it.
 >
-> Which one is right depends on what **T-028 (signup flow wiring)** decides: if
-> signup always creates the account first and *then* the tenant, requiring auth
-> costs nothing and should be done. I did not want to pre-empt that decision, so
-> the safe version shipped. Revisit with T-028.
+> **Superseded by T-034**: reviewing this guard turned up that the *entire* tenant
+> CRUD surface is unauthenticated — not just create — and that suspend/reactivate
+> must be an **operator** action, not a membership one (a tenant that can
+> reactivate itself can undo its own suspension). So "require auth on create" is
+> no longer a standalone question; it is one row of the T-034 split, which is
+> blocked on the operator identity (T-033). This card's opportunistic binding is
+> the safe interim state and breaks nothing.
 
 ### T-032 · RBAC is unbootstrappable: nothing ever assigns a role · **M** ← blocks all of `/api/v1/roles`
 **Depends on**: T-016, T-031. **Found while building F-005/T-031; verified against a live server.**
@@ -369,6 +371,156 @@ disagree, silently).
 `GET /api/v1/roles` (the 403 is gone); an invitee who accepts gains their role's
 permissions; removing a member revokes them; redelivery of `member.joined` does
 not duplicate assignments; a member's permissions are the union of their roles'.
+
+### T-033 · Platform operator identity ("global admin") · **L** ← prerequisite for T-034/T-035
+**Depends on**: T-012, T-016. **Found while reviewing T-031's guard.**
+
+**The product model these three cards assume** (confirmed, and already what the
+code does — stated here because every guard decision below hangs on it):
+the **catalog is global** — plans, versions and addons are *the SaaS operator's
+offering*, defined once for the whole platform (`catalog/module.go`: "catalog is
+global (the SaaS operator's offering), not tenant-scoped"). **A tenant is a
+customer** of this SaaS, not an owner of its own catalog. **Subscription** is the
+join: a tenant pins a *version* of a global plan (+ addons). **Entitlements are
+embedded machinery**, not a product surface — resolved per tenant from
+`plan grants + addon deltas + overrides`. So: the operator owns the offering;
+tenants consume it. That is exactly why catalog admin (T-035) and tenant
+lifecycle (T-034) are *operator* surfaces, while members/API-keys/subscription
+are *tenant* surfaces.
+
+**The gap.** The system has **no notion of the SaaS operator as an authenticated
+actor**. Authorization's RBAC is entirely *tenant-scoped* — roles live per tenant
+— so there is no way to express "this person runs the platform". `PrincipalSystem`
+/ `WithSystemContext` cannot fill the role: it is explicitly internal-only ("set
+only by internal callers, never derived from a request") and T-028 adds a CI gate
+banning it from request handlers.
+
+Consequence: every operator-owned surface is effectively unguarded, because there
+was nobody to authorize it *against* —
+
+| Surface | Guard today |
+|---|---|
+| Tenant CRUD (`/api/v1/tenants`) | **none at all** (see T-034) |
+| Catalog admin (`/api/v1/catalog/plans…`) | `requireAuth` only — **any registered user** can create/publish/archive plans in the operator's global catalog (see T-035) |
+
+**Options** (decide before building):
+
+1. **Platform-scoped RBAC + seeded bootstrap admin** *(recommended)* — extend
+   authorization with a global, tenant-less scope (`tenant_id IS NULL`, or a
+   reserved platform tenant), a `RequirePlatformPermission` middleware, and a
+   bootstrap platform-admin **seeded at startup from config** (e.g.
+   `PLATFORM_ADMIN_EMAILS`). Reuses "RBAC as data" rather than inventing a
+   parallel mechanism, and gives granular operator permissions
+   (`tenant:suspend`, `catalog:write`, …). Bonus: a seeded assignment is exactly
+   what breaks **T-032**'s bootstrap deadlock, for the platform scope at least.
+   Cost: the largest change; touches authorization's schema and its
+   tenant-scoping assumptions throughout.
+2. **`platform_admin` flag on the authn user** — a boolean/claim plus a
+   `RequirePlatformAdmin` middleware. Fastest to land and unblocks the guards
+   immediately, but it is a *second* authz mechanism alongside the RBAC the
+   system otherwise commits to, and it is all-or-nothing (no granular operator
+   permissions).
+3. **Operator API keys** — machine principals with platform scopes. Fits the
+   existing API-key machinery, but API keys are tenant-bound today, and it gives
+   the operator no *human* login path.
+
+**This is a skeleton — ship primitives, not one-off guards.** Adopters bring
+their own tenant-scoped modules (the `example` module is the template they copy),
+so the deliverable is *reusable* guards, not bespoke checks inside `tenant`:
+
+- `RequirePlatformPermission(perm)` — operator surfaces (tenant lifecycle,
+  catalog admin).
+- `RequireTenantMembership(roles…)` — tenant-scoped surfaces; the guard an
+  adopter puts on their own module's routes.
+- Applied at the **composition root**, next to the existing
+  `authentication.RequireAuth` on `/api/v1/api-keys`, so a module's routes are
+  guarded where they are mounted rather than by hand in every handler.
+
+> ⚠️ **The `example` module has no principal check at all** — and it is precisely
+> the file adopters copy to start their own module. Whatever guard this card
+> lands, `example` must **demonstrate** it, or the skeleton teaches the insecure
+> pattern by default. Make the secure path the path of least resistance.
+
+**Expected tests**: a platform admin can suspend a tenant; a tenant owner cannot;
+an anonymous caller cannot; the bootstrap admin is seeded idempotently at startup
+and is the only way in on a fresh database; the `example` module rejects an
+anonymous caller and a caller from another tenant.
+
+### T-034 · Split the tenant endpoints: self-service vs operator · **M**
+**Depends on**: T-031, T-033.
+
+> ⚠️ **Live security hole today.** The whole tenant CRUD surface is
+> **unauthenticated**: `POST /`, `GET /{id}`, `PATCH /{id}`, `POST
+> /{id}/suspend`, `POST /{id}/reactivate`, `DELETE /{id}` never look at the
+> principal. Anyone who knows or guesses a tenant UUID can rename, suspend, or
+> soft-delete **any tenant**, with no credentials. The tenant module's handler is
+> mounted bare and its CRUD handlers do no check — every *other* module's REST
+> adapter checks a principal; tenant CRUD is the outlier.
+>
+> Note the cause of the confusion: `tenant.WithExempt("/api/v1/tenants", …)`
+> exempts these paths from the **tenant-resolution** middleware (you cannot
+> resolve a tenant *context* for an operation that manages tenants — chicken and
+> egg). That is a different middleware from `authenticate`. Being exempt from
+> tenant resolution was conflated with being public.
+
+**The design.** The resource mixes two audiences, so one guard cannot be right
+for all of it:
+
+| Route | Audience | Guard |
+|---|---|---|
+| `POST /tenants` | **open policy question — see below** | authenticated user; creator becomes owner (T-031 ✅) |
+| `GET /tenants/{id}` | tenant member (the SPA settings/switcher read it) | active membership in `{id}` |
+| `PATCH /tenants/{id}` | tenant owner/admin (edit name/settings) | `owner \| admin` membership in `{id}` |
+| `POST /{id}/suspend`, `/reactivate` | **operator only** | platform admin (T-033) |
+| `DELETE /{id}` | operator — *or* owner self-serve account closure (**product policy call**) | platform admin (± owner) |
+
+**Why suspend/reactivate must NOT be a membership check** (this was nearly
+shipped as one): suspension is the *enforcement* lever — dunning, abuse,
+non-payment. If a tenant owner can reactivate their own tenant, the party being
+enforced against can trivially undo the enforcement. Same reasoning makes DELETE
+sensitive.
+
+**❓ Open policy question — who may create a tenant?** T-031 assumed *self-serve*
+(any authenticated user creates their own org and becomes its owner), because
+T-028's acceptance test reads "register → create tenant". But a SaaS may instead
+be **operator-provisioned** (the global admin creates the tenant for a customer,
+then invites their first user as owner) — both are legitimate shapes, and the
+skeleton arguably wants to support both:
+
+- **Self-serve** — `POST /tenants` requires an authenticated user; creator becomes
+  owner. (What T-031 ships.)
+- **Operator-provisioned** — `POST /tenants` requires a platform admin; the
+  operator does *not* become a member, and the customer's first owner arrives via
+  an invitation. Note this makes T-031's "creator becomes owner" **wrong** for
+  that path — an operator creating a hundred tenants must not end up owning them.
+- **Both** — allow either principal: a user creating their own org becomes its
+  owner; a platform admin creating one for a customer does not.
+
+Decide this before T-034 is built; it is the one row of the table above that
+changes T-031's behavior.
+
+**Also decide**: should tenant admin accept a *machine* principal (API key), or
+users only? Membership routes are user-only today.
+
+**Migration note**: once `GET/PATCH /{id}` require membership, tenants created
+**before T-031** have no owner and become unreachable by their creator. Fresh
+databases are fine; a dev DB may need a backfill.
+
+**Expected tests**: anonymous → 401 on every route; a non-member → 403; a member
+can read but not update; an owner can update but **cannot** suspend/reactivate;
+a platform admin can; the creator can administer the tenant they just made.
+
+### T-035 · Guard the catalog admin surface · **S**
+**Depends on**: T-033.
+**Problem**: catalog is "the SaaS operator's offering, global, not tenant-scoped"
+— but its admin routes (`POST /plans`, `/publish`, `/archive`, addons, versions)
+are guarded by `requireAuth` alone, so **any registered user can mutate the
+operator's global catalog**: publish plans, archive them, change addon deltas.
+The public listing (`GET /catalog/public`) is intentionally open and stays so.
+**Deliverables**: guard every catalog *mutation* with the platform-admin
+permission from T-033; leave reads/public listing as they are.
+**Expected tests**: a plain tenant user gets 403 creating/publishing a plan; a
+platform admin succeeds; `GET /catalog/public` stays open to anonymous callers.
 
 ### T-016 · Authorization module (dynamic RBAC) · **M** · ✅ DONE (PR #19)
 **Depends on**: T-010, T-014. **Spec**: PLAN.md §3.
