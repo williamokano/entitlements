@@ -21,12 +21,13 @@ beforeEach(() => {
   clearTokens()
 })
 
-const renderSignIn = () =>
+const renderSignIn = (entry: string | { pathname: string; state: unknown } = '/auth/sign-in') =>
   render(
-    <MemoryRouter initialEntries={['/auth/sign-in']}>
+    <MemoryRouter initialEntries={[entry]}>
       <Routes>
         <Route path="/auth/sign-in" element={<SignInPage />} />
         <Route path="/" element={<div>home page</div>} />
+        <Route path="/invitations/:tenantId/:invId" element={<div>invitation page</div>} />
       </Routes>
     </MemoryRouter>,
   )
@@ -67,5 +68,24 @@ describe('Sign-in', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid email or password.')
     expect(screen.queryByText('home page')).not.toBeInTheDocument()
     expect(getTokens()).toBeNull()
+  })
+
+  // RequireAuth (and the invitation page) stash where the user was headed in
+  // `state.from`; signing in must return them there, not to the app root.
+  it('returns the user to where they were headed instead of the app root', async () => {
+    const user = userEvent.setup()
+    server.use(
+      http.post(LOGIN_PATH, () =>
+        HttpResponse.json({ access_token: 'acc-1', refresh_token: 'ref-1', token_type: 'Bearer', access_expires_at: '2026-01-01T00:00:00Z' }),
+      ),
+    )
+
+    renderSignIn({ pathname: '/auth/sign-in', state: { from: { pathname: '/invitations/t-1/inv-1', search: '', hash: '' } } })
+    await user.type(screen.getByLabelText(/email address/i), 'user@example.com')
+    await user.type(screen.getByLabelText(/password/i), 'sup3rsecret')
+    await user.click(screen.getByRole('button', { name: /sign in/i }))
+
+    expect(await screen.findByText('invitation page')).toBeInTheDocument()
+    expect(screen.queryByText('home page')).not.toBeInTheDocument()
   })
 })

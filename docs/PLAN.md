@@ -79,7 +79,7 @@ modules/<name>/
 The root of isolation; everything else is tenant-scoped.
 - Tenant lifecycle: create, update, suspend, soft-delete (status: `active | suspended | deleted`), slug + UUID.
 - Extensible metadata (`settings JSONB`) so each SaaS adds fields without schema changes.
-- **Membership**: users ↔ tenants (a user can belong to multiple tenants) with role reference; invitation flow (invite by email, accept/decline, expiry).
+- **Membership**: users ↔ tenants (a user can belong to multiple tenants) with role reference; invitation flow (invite by email, accept/decline, expiry). A membership also records **the email it was invited by**: accepting an invitation is the only way a membership is created, and the invitation already carries the email — so the tenant keeps its own view of member identity and can name its members without reaching into authentication to resolve a `user_id`. Each module owns its ports and depends only on itself; a duplicated email beats a cross-module lookup (authentication remains extractable without dragging tenant's contracts with it).
 - **Provisioning pipeline**: `TenantCreated` event drives hookable onboarding steps (seed default roles, create trial subscription, …) — each SaaS registers its own steps at the composition root. This is how "tenant creation is customizable per SaaS" is achieved.
 - Tenant resolution middleware: subdomain / header / JWT claim → `authctx`; repositories refuse to run without a tenant in context (except explicitly tenant-less admin ops).
 

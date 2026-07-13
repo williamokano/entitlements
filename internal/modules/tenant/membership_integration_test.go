@@ -4,6 +4,7 @@ package tenant_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -266,6 +267,87 @@ func TestRemoveMemberEmitsMemberLeftAndRevokesAccess(t *testing.T) {
 	mu.Unlock()
 	if got < 1 {
 		t.Fatalf("member.left events = %d, want >= 1", got)
+	}
+}
+
+// A membership is only ever born by accepting an invitation, so the tenant can
+// keep the invited email on the membership and name its members without asking
+// the authentication module to resolve a user id.
+func TestListMembersCarriesTheInvitedEmail(t *testing.T) {
+	deps, _ := newDeps(t)
+	mod := tenant.New(deps)
+	admin := serverAs(mod.Handler(), uuid.New(), "admin@example.com")
+	defer admin.Close()
+
+	tenantID := mkTenant(t, admin, "acme")
+	invID := invite(t, admin, tenantID, "joiner@example.com", "member")
+
+	userID := uuid.New()
+	joiner := serverAs(mod.Handler(), userID, "joiner@example.com")
+	defer joiner.Close()
+	if status, body := post(t, joiner.URL+"/"+tenantID.String()+"/invitations/"+invID.String()+"/accept", ""); status != http.StatusCreated {
+		t.Fatalf("accept: status %d (%s), want 201", status, body)
+	}
+
+	status, body := do(t, http.MethodGet, admin.URL+"/"+tenantID.String()+"/members", "")
+	if status != http.StatusOK {
+		t.Fatalf("list members: status %d (%s), want 200", status, body)
+	}
+
+	var got struct {
+		Members []struct {
+			UserID uuid.UUID `json:"user_id"`
+			Email  string    `json:"email"`
+			Role   string    `json:"role"`
+			Status string    `json:"status"`
+		} `json:"members"`
+	}
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("decode members: %v (%s)", err, body)
+	}
+	if len(got.Members) != 1 {
+		t.Fatalf("members = %d, want 1 (%s)", len(got.Members), body)
+	}
+	m := got.Members[0]
+	if m.UserID != userID || m.Email != "joiner@example.com" || m.Role != "member" || m.Status != "active" {
+		t.Fatalf("member = %+v, want the joiner as an active member with their invited email", m)
+	}
+}
+
+// Memberships written before the email column exists (its default is '') must
+// still list — clients fall back to the user id rather than the endpoint failing.
+func TestListMembersToleratesAMembershipWithoutAnEmail(t *testing.T) {
+	deps, _ := newDeps(t)
+	mod := tenant.New(deps)
+	admin := serverAs(mod.Handler(), uuid.New(), "admin@example.com")
+	defer admin.Close()
+
+	tenantID := mkTenant(t, admin, "acme")
+
+	// Insert a membership the way a pre-migration row looks: no email supplied.
+	legacyUserID := uuid.New()
+	if _, err := deps.Pool.Exec(context.Background(),
+		`INSERT INTO tenant.memberships (id, tenant_id, user_id, role, status, created_at, updated_at)
+		 VALUES ($1, $2, $3, 'member', 'active', now(), now())`,
+		uuid.New(), tenantID, legacyUserID); err != nil {
+		t.Fatalf("insert legacy membership: %v", err)
+	}
+
+	status, body := do(t, http.MethodGet, admin.URL+"/"+tenantID.String()+"/members", "")
+	if status != http.StatusOK {
+		t.Fatalf("list members: status %d (%s), want 200", status, body)
+	}
+	var got struct {
+		Members []struct {
+			UserID uuid.UUID `json:"user_id"`
+			Email  string    `json:"email"`
+		} `json:"members"`
+	}
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("decode members: %v (%s)", err, body)
+	}
+	if len(got.Members) != 1 || got.Members[0].UserID != legacyUserID || got.Members[0].Email != "" {
+		t.Fatalf("members = %+v, want the legacy member with an empty email", got.Members)
 	}
 }
 

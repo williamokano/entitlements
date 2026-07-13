@@ -20,11 +20,16 @@ const (
 	MemberRemoved MemberStatus = "removed"
 )
 
-// Membership binds a global user to a tenant with a role reference.
+// Membership binds a global user to a tenant with a role reference. Email is the
+// address the member was invited by: memberships are only ever created by
+// accepting an invitation, so the tenant keeps its own view of member identity
+// rather than asking another module to resolve a user id. It is empty for
+// memberships that predate the column.
 type Membership struct {
 	ID        uuid.UUID
 	TenantID  uuid.UUID
 	UserID    uuid.UUID
+	Email     string
 	Role      string
 	Status    MemberStatus
 	CreatedAt time.Time

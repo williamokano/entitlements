@@ -46,6 +46,9 @@ const appRoutes: RouteObject[] = [
   { path: '/auth/forgot-password', Component: lazy(() => import('@/views/app/auth/forgot-password')) },
   { path: '/auth/reset-password', Component: lazy(() => import('@/views/app/auth/reset-password')) },
   { path: '/auth/verify-email', Component: lazy(() => import('@/views/app/auth/verify-email')) },
+  // Invitation accept/decline (F-005) — public: an invitee lands here from their
+  // email, usually signed out, and is sent to sign-in (and back) to accept.
+  { path: '/invitations/:tenantId/:invId', Component: lazy(() => import('@/views/app/invitations')) },
 ]
 
 // The vendored Inspinia demo, mounted as a lazy splat route. The build-time

@@ -2,20 +2,27 @@
 // store (F-003). Signed-in users are bounced to the app; a post-registration
 // redirect shows an "account created, sign in" banner.
 import { useSyncExternalStore } from 'react'
-import { Link, Navigate, useLocation } from 'react-router'
+import { Link, Navigate, useLocation, type Location } from 'react-router'
 import { isAuthenticated, subscribe } from '@/lib/auth'
 import AuthShell from '../components/AuthShell'
 import Form from './components/Form'
 
-type SignInState = { registered?: boolean; email?: string } | null
+// `from` is stashed by whatever bounced the user here: RequireAuth when a guard
+// rejects an anonymous visitor, or the invitation page when it needs an identity
+// to accept with. Signing in returns them there instead of the app root.
+type SignInState = { registered?: boolean; email?: string; from?: Location } | null
+
+const redirectTarget = (from?: Location): string | undefined =>
+  from ? `${from.pathname}${from.search ?? ''}${from.hash ?? ''}` : undefined
 
 const Page = () => {
   const authenticated = useSyncExternalStore(subscribe, isAuthenticated)
   const location = useLocation()
   const state = location.state as SignInState
+  const redirectTo = redirectTarget(state?.from)
 
   if (authenticated) {
-    return <Navigate to="/" replace />
+    return <Navigate to={redirectTo ?? '/'} replace />
   }
 
   return (
@@ -35,7 +42,7 @@ const Page = () => {
           Account created. Please sign in.
         </p>
       )}
-      <Form prefillEmail={state?.email ?? ''} />
+      <Form prefillEmail={state?.email ?? ''} redirectTo={redirectTo} />
     </AuthShell>
   )
 }
