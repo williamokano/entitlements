@@ -1,27 +1,26 @@
-// Plans list — the catalog landing screen. Shows every plan with its lifecycle
-// status and a public badge, and creates a new plan (key + name) which the
-// backend seeds with a first draft version. Rows link to the plan detail.
+// Add-ons list — the second catalog section. Add-ons extend plans with extra
+// pricing and entitlement deltas; like plans, their content lives in versions.
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import PageBreadcrumb from '@/components/PageBreadcrumb'
 import Icon from '@/components/wrappers/Icon'
-import { createPlan, listPlans, type Plan } from './api'
-import CatalogTabs from './components/CatalogTabs'
-import CreateItemModal from './components/CreateItemModal'
-import { errorMessage, statusBadgeClass } from './helpers'
+import { createAddon, listAddons, type Addon } from '../api'
+import CatalogTabs from '../components/CatalogTabs'
+import CreateItemModal from '../components/CreateItemModal'
+import { errorMessage, statusBadgeClass } from '../helpers'
 
 const Page = () => {
   const navigate = useNavigate()
-  const [plans, setPlans] = useState<Plan[]>([])
+  const [addons, setAddons] = useState<Addon[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
-      const result = await listPlans(signal)
+      const result = await listAddons(signal)
       if (signal?.aborted) return
-      setPlans(result)
+      setAddons(result)
       setError(null)
     } catch (err) {
       if (signal?.aborted) return
@@ -46,12 +45,12 @@ const Page = () => {
   }
 
   const handleCreate = async (key: string, name: string) => {
-    const { plan } = await createPlan(key, name)
+    const { addon } = await createAddon(key, name)
     setCreating(false)
-    navigate(`/catalog/plans/${plan.id}`)
+    navigate(`/catalog/addons/${addon.id}`)
   }
 
-  const isEmpty = !loading && plans.length === 0
+  const isEmpty = !loading && addons.length === 0
 
   return (
     <>
@@ -61,12 +60,12 @@ const Page = () => {
       <div className="card">
         <div className="card-header flex items-center justify-between">
           <div>
-            <h4 className="card-title">Plans</h4>
-            <p className="text-default-500 mt-1 text-sm">Product plans and their versioned pricing. Editing happens on draft versions.</p>
+            <h4 className="card-title">Add-ons</h4>
+            <p className="text-default-500 mt-1 text-sm">Optional extras that layer entitlement deltas on top of a plan.</p>
           </div>
           <button type="button" className="btn bg-primary text-white hover:bg-primary-hover" onClick={() => setCreating(true)}>
             <Icon icon="plus" className="text-base" />
-            New plan
+            New add-on
           </button>
         </div>
 
@@ -81,12 +80,12 @@ const Page = () => {
           )}
 
           {loading ? (
-            <p className="text-default-500 py-8 text-center text-sm">Loading plans…</p>
+            <p className="text-default-500 py-8 text-center text-sm">Loading add-ons…</p>
           ) : isEmpty ? (
             <div className="py-10 text-center">
-              <Icon icon="category" className="text-default-400 mx-auto text-4xl" />
-              <h5 className="mt-3 font-medium">No plans yet</h5>
-              <p className="text-default-500 mt-1 text-sm">Create a plan to start building your pricing catalog.</p>
+              <Icon icon="puzzle" className="text-default-400 mx-auto text-4xl" />
+              <h5 className="mt-3 font-medium">No add-ons yet</h5>
+              <p className="text-default-500 mt-1 text-sm">Create an add-on to offer extras alongside your plans.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -96,35 +95,27 @@ const Page = () => {
                     <th className="text-start">Name</th>
                     <th className="text-start">Key</th>
                     <th className="text-start">Status</th>
-                    <th className="text-start">Visibility</th>
                     <th className="text-end">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {plans.map((plan) => (
-                    <tr key={plan.id} className="hover:bg-default-50 cursor-pointer" onClick={() => navigate(`/catalog/plans/${plan.id}`)}>
-                      <td className="font-medium">{plan.name}</td>
+                  {addons.map((addon) => (
+                    <tr key={addon.id} className="hover:bg-default-50 cursor-pointer" onClick={() => navigate(`/catalog/addons/${addon.id}`)}>
+                      <td className="font-medium">{addon.name}</td>
                       <td>
-                        <code className="text-default-600 rounded bg-default-100 px-1.5 py-0.5 text-xs">{plan.key}</code>
+                        <code className="text-default-600 rounded bg-default-100 px-1.5 py-0.5 text-xs">{addon.key}</code>
                       </td>
                       <td>
-                        <span className={`badge badge-label ${statusBadgeClass(plan.status)}`}>{plan.status}</span>
-                      </td>
-                      <td>
-                        {plan.public ? (
-                          <span className="badge badge-label bg-info/15 text-info">Public</span>
-                        ) : (
-                          <span className="badge badge-label bg-default-200 text-default-600">Private</span>
-                        )}
+                        <span className={`badge badge-label ${statusBadgeClass(addon.status)}`}>{addon.status}</span>
                       </td>
                       <td className="text-end">
                         <button
                           type="button"
                           className="btn btn-sm border border-default-300 hover:border-primary hover:text-primary"
-                          aria-label={`Open ${plan.name}`}
+                          aria-label={`Open ${addon.name}`}
                           onClick={(e) => {
                             e.stopPropagation()
-                            navigate(`/catalog/plans/${plan.id}`)
+                            navigate(`/catalog/addons/${addon.id}`)
                           }}
                         >
                           Manage
@@ -139,7 +130,7 @@ const Page = () => {
         </div>
       </div>
 
-      {creating && <CreateItemModal noun="Plan" onClose={() => setCreating(false)} onCreate={handleCreate} />}
+      {creating && <CreateItemModal noun="Add-on" onClose={() => setCreating(false)} onCreate={handleCreate} />}
     </>
   )
 }
