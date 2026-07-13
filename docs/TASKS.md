@@ -476,11 +476,43 @@ change-gated + idempotent): a limit that shrinks below current usage emits one
 Other modules consume via `ports.UsageReader` (`Module.UsagePort()`). **Frontend**:
 paired **F-012** (usage/quota display on the Entitlements page).
 
-### T-025 · Billing: invoices + line-item snapshots · **M**
+### T-025 · Billing: invoices + line-item snapshots · **M** · ✅ DONE (PR #<pending>)
 **Depends on**: T-019. **Spec**: PLAN.md §7.
 **Deliverables**: `Invoice` aggregate (`draft→open→paid|void|uncollectible`); line items snapshotting plan/addon name, version, unit price, quantity, currency at issuance (copied values); per-tenant gapless invoice number sequence; totals in minor units; `TaxCalculator` port (no-op default); credit notes; REST list/get.
 **Acceptance criteria**: an issued invoice is a historical fact — later catalog changes never alter it; numbering is per-tenant, gapless, concurrency-safe; lifecycle transitions guarded.
-**Expected tests**:
+**Note (implemented)**: shipped `internal/modules/billing/` (hexagonal) +
+`migrations/billing/00001_invoices.sql` (schema `billing`: `invoices`,
+`invoice_line_items`, `credit_notes`, and `number_sequences` — a generic
+per-`(tenant, kind)` gapless counter serving invoices and credit notes).
+Design points:
+- **Snapshotting.** `Issue` reads the tenant's live subscription (subscription
+  port) + its pinned plan version and attached addon versions (catalog port) and
+  **copies** key/version/unit-price/quantity/currency into `invoice_line_items`
+  rows. The invoice is read back only from its own rows, so a later plan-version
+  publish or price change never rewrites it (proven live + by
+  `TestIssuedInvoiceImmuneToCatalogChanges`). Money is integer minor units
+  throughout; no floats. Line amount = unit × quantity (exact), subtotal = Σ
+  amounts, total = subtotal + tax.
+- **Gapless numbering.** `NextNumber` runs one atomic upsert inside the issuing
+  `UnitOfWork` tx: `INSERT ... VALUES (tenant, kind, 1) ON CONFLICT (tenant, kind)
+  DO UPDATE SET next_number = next_number + 1 RETURNING next_number`. The conflict
+  row lock serializes concurrent issuers per tenant → 1,2,3… no gaps/dupes; a
+  rolled-back issue rolls back its increment; tenants are independent.
+- **TaxCalculator** is a service-level port with a shipped `NoopTaxCalculator`
+  (zero tax) default; issuance always invokes it and stores `tax_minor`.
+- **Lifecycle** is a guarded transition table in the pure domain.
+- **Event seam.** Paying an invoice publishes `billing.invoice_paid` (exact type)
+  via the outbox with the `subscription_id`, so the subscription module's existing
+  idempotent consumer works. The PaymentProvider/charge flow stays in T-026.
+- REST under `/api/v1/billing/invoices` (tenant-scoped, auth-required):
+  `POST` (issue), `GET` (list), `GET /{id}`, `POST /{id}/{pay,void,uncollectible}`,
+  `POST|GET /{id}/credit-notes`. `ports.BillingReader` exposes GetInvoice/ListInvoices.
+- Wired in `cmd/api/app.go` (takes catalog + subscription ports). No depguard
+  change needed (cross-module *ports* imports are already allowed; only the pure
+  `domain` package is import-restricted, and it stays pure). No sqlc drift (sqlc
+  reads only `migrations/platform`).
+- **Paired frontend**: invoices UI is carded as **F-013** below.
+**Expected tests** — all implemented and green:
 - unit: `TestInvoiceLifecycleTransitionTable` — allowed/denied transitions.
 - unit: `TestTotalsSumLineItemsInMinorUnits` — no floats anywhere (assert integer math incl. rounding rules).
 - unit: `TestTaxCalculatorPortInvokedNoopDefaultZeroTax`.
@@ -691,6 +723,24 @@ Optionally a "consume"/"release" affordance for demo/testing. Consume surfaces t
 **Expected tests** (MSW): the panel renders used/limit per feature; a feature at or
 over its limit shows the over-limit indicator; a consume that returns 422 surfaces
 the quota-exceeded message; an unlimited feature renders without a bar.
+
+### F-013 · Billing invoices screen · **M** *(backend: T-025 — merged)*
+**Depends on**: F-009.
+**Screens**: a Billing page listing the tenant's invoices (number, status, issued
+date, currency, total in minor units formatted to the currency) with a detail view
+showing the snapshotted line items (kind, description, key + version, unit price,
+quantity, amount) and the subtotal / tax / total breakdown. Actions for the
+lifecycle transitions the backend exposes (pay / void / mark uncollectible, shown
+per current status) and a "credit note" affordance (amount + mandatory reason) that
+lists the invoice's credit notes with their negated amounts. Money is always
+rendered from integer minor units; never parse into floats.
+**Endpoints**: `GET /api/v1/billing/invoices`, `GET /api/v1/billing/invoices/{id}`,
+`POST /api/v1/billing/invoices` (issue), `POST /api/v1/billing/invoices/{id}/{pay,void,uncollectible}`,
+`POST|GET /api/v1/billing/invoices/{id}/credit-notes`.
+**Expected tests** (MSW): the list renders invoice number/status/total; the detail
+view renders snapshotted line items and the subtotal/tax/total; a lifecycle action
+updates the shown status; creating a credit note without a reason is blocked and a
+created credit note shows a negated amount; another tenant's invoices are not shown.
 
 ---
 

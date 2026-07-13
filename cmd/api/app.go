@@ -13,6 +13,7 @@ import (
 	"github.com/williamokano/entitlements/internal/app"
 	"github.com/williamokano/entitlements/internal/modules/authentication"
 	"github.com/williamokano/entitlements/internal/modules/authorization"
+	"github.com/williamokano/entitlements/internal/modules/billing"
 	"github.com/williamokano/entitlements/internal/modules/catalog"
 	"github.com/williamokano/entitlements/internal/modules/entitlements"
 	"github.com/williamokano/entitlements/internal/modules/example"
@@ -88,6 +89,9 @@ func buildApplication(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger
 	if err := entitlementsMod.RegisterJobs(deps.Jobs); err != nil {
 		return nil, fmt.Errorf("register entitlements jobs: %w", err)
 	}
+	// Billing snapshots the pinned plan/addon versions and the tenant's live
+	// subscription into invoices, reading the catalog and subscription ports.
+	billingMod := billing.New(deps, catalogMod.Port(), subscriptionMod.Port())
 	modules := []app.Module{
 		tenantMod,
 		authMod,
@@ -95,6 +99,7 @@ func buildApplication(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger
 		catalogMod,
 		subscriptionMod,
 		entitlementsMod,
+		billingMod,
 		example.New(deps),
 	}
 
