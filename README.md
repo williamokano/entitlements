@@ -138,9 +138,18 @@ Implemented (tasks **T-001 – T-024**):
   integer minor units, trial/grace config, feature grants) and read-only once
   published, with publish gated behind an immutability confirm; add-ons
   list/detail/versions with an entitlement-deltas + compatible-plans editor; and
-  a public **pricing preview** bound to `GET /catalog/public`. The remaining
-  module screens (members, roles, subscription) are placeholder pages until their
-  **F-track** cards land — see [`docs/FRONTEND.md`](docs/FRONTEND.md).
+  a public **pricing preview** bound to `GET /catalog/public`. The
+  **subscription** screen is live too (F-009, under `/subscription`): a
+  current-subscription card (status chip per state, current period, trial
+  countdown, cancel-at-period-end and scheduled-change banners) whose lifecycle
+  actions are **rendered from the backend state machine** (only legal
+  transitions show — pause/resume/reactivate/cancel); an empty-state subscribe
+  flow (public plan + billing-cycle picker); a change-plan flow (immediate re-pin
+  vs a scheduled-for-period-end downgrade with a cancel-change button); and an
+  addons section (quantity steppers, attach from compatible published addons,
+  detach with a confirm). The remaining module screens (members, roles) are
+  placeholder pages until their **F-track** cards land — see
+  [`docs/FRONTEND.md`](docs/FRONTEND.md).
 
 The admin SPA also ships as a **generic Docker image** (F-002): one image built
 once, configured entirely at container start via environment variables (API URL,
@@ -148,8 +157,8 @@ tenant mode, branding, demo toggle) — see *Running the admin SPA in Docker*
 below. `docker compose up` now brings up Postgres, the API, and the SPA together.
 
 Not yet implemented: **billing** (the rest of Milestone 3); the remaining
-frontend module screens (members, roles, subscription, the entitlements viewer,
-overrides admin, and the usage/quota panel — F-005, F-007, F-009–F-012). See
+frontend module screens (members, roles, the entitlements viewer, overrides
+admin, and the usage/quota panel — F-005, F-007, F-010–F-012). See
 [`docs/TASKS.md`](docs/TASKS.md) for the full plan.
 (Note: the tenant creator is not yet auto-assigned the `owner` role, so an
 initial role assignment currently has to be bootstrapped out of band — see the
