@@ -11,9 +11,9 @@ import (
 
 	"github.com/google/uuid"
 
-	catalogports "github.com/williamokano/entitlements/internal/modules/catalog/ports"
 	"github.com/williamokano/entitlements/internal/modules/billing/internal/domain"
 	billingports "github.com/williamokano/entitlements/internal/modules/billing/ports"
+	catalogports "github.com/williamokano/entitlements/internal/modules/catalog/ports"
 	subports "github.com/williamokano/entitlements/internal/modules/subscription/ports"
 	"github.com/williamokano/entitlements/internal/platform/apperr"
 	"github.com/williamokano/entitlements/internal/platform/authctx"
@@ -57,22 +57,26 @@ func (NoopTaxCalculator) Calculate(context.Context, []domain.LineItem, string) (
 
 // Service implements the billing use cases and ports.BillingReader.
 type Service struct {
-	uow     *postgres.UnitOfWork
-	outbox  *events.Outbox
-	repo    domain.Repository
-	catalog CatalogReader
-	subs    SubscriptionReader
-	tax     TaxCalculator
-	ids     id.Generator
-	clk     clock.Clock
+	uow      *postgres.UnitOfWork
+	outbox   *events.Outbox
+	repo     domain.Repository
+	catalog  CatalogReader
+	subs     SubscriptionReader
+	tax      TaxCalculator
+	provider PaymentProvider
+	ids      id.Generator
+	clk      clock.Clock
 }
 
-// New builds a Service. A nil TaxCalculator defaults to NoopTaxCalculator.
-func New(uow *postgres.UnitOfWork, outbox *events.Outbox, repo domain.Repository, catalog CatalogReader, subs SubscriptionReader, tax TaxCalculator, ids id.Generator, clk clock.Clock) *Service {
+// New builds a Service. A nil TaxCalculator defaults to NoopTaxCalculator. The
+// PaymentProvider is required for the charge flow (renewal charges, payment
+// methods) but may be nil for read-only/issuance-only use; the composition root
+// injects the fake provider by default.
+func New(uow *postgres.UnitOfWork, outbox *events.Outbox, repo domain.Repository, catalog CatalogReader, subs SubscriptionReader, tax TaxCalculator, provider PaymentProvider, ids id.Generator, clk clock.Clock) *Service {
 	if tax == nil {
 		tax = NoopTaxCalculator{}
 	}
-	return &Service{uow: uow, outbox: outbox, repo: repo, catalog: catalog, subs: subs, tax: tax, ids: ids, clk: clk}
+	return &Service{uow: uow, outbox: outbox, repo: repo, catalog: catalog, subs: subs, tax: tax, provider: provider, ids: ids, clk: clk}
 }
 
 // LineView is a read model of a snapshotted line item.
