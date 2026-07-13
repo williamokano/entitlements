@@ -408,7 +408,7 @@ must be bootstrapped out of band. Wire owner-on-create (or bridge
 - integration: `TestEntitlementsSummaryChangedEmittedOnEffectiveSetChange` — a relevant event → exactly one `EntitlementsSummaryChanged` carrying the full re-resolved set; no-op change emits nothing.
 - integration (HTTP): `TestGetAllEntitlementsSingleCall` + `TestGetSingleEntitlement`.
 
-### T-023 · Entitlements: tenant overrides + audit · **M** · ✅ DONE (PR #32)
+### T-023 · Entitlements: tenant overrides + audit · **M** · ✅ DONE (PR #34)
 **Depends on**: T-022.
 **Deliverables**: override CRUD (feature_key, **absolute `value`** — matching how
 T-022's resolver reads overrides; the table has no `delta` column, so overrides
