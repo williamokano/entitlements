@@ -1,11 +1,17 @@
+import { type ChangeEvent, type FormEvent, useState } from 'react'
+import { Link } from 'react-router'
 import { useAuth } from '@/hooks/useAuth'
-import { ChangeEvent, FormEvent, useState } from 'react'
 
-const Form = () => {
+type FormProps = {
+  /** Prefilled email, e.g. carried over from the sign-up redirect. */
+  prefillEmail?: string
+}
+
+const Form = ({ prefillEmail = '' }: FormProps) => {
   const { login, loading, error } = useAuth()
 
   const [form, setForm] = useState({
-    email: '',
+    email: prefillEmail,
     password: '',
   })
 
@@ -41,10 +47,15 @@ const Form = () => {
       </div>
 
       <div className="mb-5">
-        <label htmlFor="userPassword" className="form-label">
-          Password&nbsp;
-          <span className="text-danger">*</span>
-        </label>
+        <div className="flex items-center justify-between">
+          <label htmlFor="userPassword" className="form-label">
+            Password&nbsp;
+            <span className="text-danger">*</span>
+          </label>
+          <Link to="/auth/forgot-password" className="text-primary text-sm font-medium underline underline-offset-4">
+            Forgot password?
+          </Link>
+        </div>
         <div className="input-group">
           <input
             type="password"
@@ -66,10 +77,11 @@ const Form = () => {
       )}
       <div>
         <button type="submit" disabled={loading} className="btn bg-primary w-full py-3 font-semibold text-white hover:bg-primary-hover">
-          Sign In
+          {loading ? 'Signing in…' : 'Sign In'}
         </button>
       </div>
     </form>
   )
 }
+
 export default Form

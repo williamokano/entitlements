@@ -528,7 +528,7 @@ paired F-card).
 - CI smoke: build image, `docker run -e API_BASE_URL=http://smoke-test`, assert `/app-config.js` contains it and `/` serves the SPA (200 + history fallback on a deep link).
 - unit: entrypoint template renders every documented variable with defaults.
 
-### F-003 · Auth screens · **L** *(backend: T-012, T-013 — merged)*
+### F-003 · Auth screens · **L** *(backend: T-012, T-013 — merged)* · ✅ DONE (PR #<pending>)
 **Depends on**: F-001.
 **Screens** (adapt `views/auth/basic/*` + `account-settings` security tab): sign-in, sign-up, forgot/reset password (token from URL), email verification (request + confirm + success-mail state), password change, active sessions list + "log out other devices", logout.
 **Endpoints**: `POST /api/v1/auth/{register,login,refresh,logout,verify-email/request,verify-email,password/forgot,password/reset,password/change}`, `GET /api/v1/auth/sessions`, `POST /api/v1/auth/sessions/revoke-others`.
@@ -538,6 +538,7 @@ paired F-card).
 - sign-up client-side validation (yup) blocks invalid email/short password before any request.
 - reset-password page posts the token from the URL and routes to sign-in on success.
 - sessions page lists sessions; revoke-others calls the endpoint and refreshes the list.
+**Delivered**: auth screens under `admin/src/views/app/auth/` — `sign-in` (polished: forgot-password link, post-register banner, 429-friendly message), `sign-up` (yup email+password+confirm validation), `forgot-password` (→ `password/forgot`, "if the email exists" success state), `reset-password?token=…` (reads token from URL → `password/reset` → routes to sign-in), `verify-email?token=…` (posts token, success/failure states, adapted from `success-mail`). Account security area at `/account/security` (behind `RequireAuth`): change-password form (`password/change`), active-sessions table with "log out other devices" (`GET /sessions` + `sessions/revoke-others` + refresh), and an authed "resend verification email" action (`verify-email/request`, using the email captured at sign-in). `lib/auth.ts` extended with register/recovery/verify/change/sessions actions (+ `getSessionEmail`); `useAuth` gained `register` and a shared 429→friendly-message mapping; real **logout** wired into the TopBar user menu (`SimpleUserDropdown`); `App.tsx` mounts a `react-toastify` `ToastContainer`. Auth routes added in `routes/index.tsx`; all auth pages redirect already-authenticated users to `/`. Tests (MSW + RTL, all four expected cases): `sign-in/SignIn.test.tsx`, `sign-up/SignUp.test.tsx`, `reset-password/ResetPassword.test.tsx`, `account/security/Sessions.test.tsx`. **Out of scope / follow-ups**: 2FA (theme `two-factor` page is model-ready but no backend endpoint yet); the account area covers security only (personal-info/profile fields deferred to F-004+); no cross-app "unverified email" banner (verification status has no read endpoint — resend lives on the security page).
 
 ### F-004 · Tenant screens: onboarding, settings, lifecycle · **M** *(backend: T-010, T-011 — merged)*
 **Depends on**: F-001.
