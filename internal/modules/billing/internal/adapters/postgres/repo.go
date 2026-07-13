@@ -202,6 +202,52 @@ func (r *Repo) ListCreditNotes(ctx context.Context, tenantID, invoiceID uuid.UUI
 	return out, nil
 }
 
+// CreatePaymentMethod inserts a tokenized payment method. The DB CHECK
+// constraint (schema) rejects a raw PAN even if a caller bypasses the domain
+// guard, so credentials never persist.
+func (r *Repo) CreatePaymentMethod(ctx context.Context, pm *domain.PaymentMethod) error {
+	_, err := platformpg.Q(ctx, r.pool).Exec(ctx,
+		`INSERT INTO billing.payment_methods (id, tenant_id, customer_ref, token, brand, last4, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		pm.ID, pm.TenantID, pm.CustomerRef, pm.Token, nullString(pm.Brand), nullString(pm.Last4), pm.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("billing: insert payment method: %w", err)
+	}
+	return nil
+}
+
+// ListPaymentMethods returns a tenant's stored payment methods, newest first.
+func (r *Repo) ListPaymentMethods(ctx context.Context, tenantID uuid.UUID) ([]*domain.PaymentMethod, error) {
+	rows, err := platformpg.Q(ctx, r.pool).Query(ctx,
+		`SELECT id, tenant_id, customer_ref, token, COALESCE(brand, ''), COALESCE(last4, ''), created_at
+		 FROM billing.payment_methods WHERE tenant_id = $1 ORDER BY created_at DESC`, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("billing: list payment methods: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*domain.PaymentMethod
+	for rows.Next() {
+		var pm domain.PaymentMethod
+		if err := rows.Scan(&pm.ID, &pm.TenantID, &pm.CustomerRef, &pm.Token, &pm.Brand, &pm.Last4, &pm.CreatedAt); err != nil {
+			return nil, fmt.Errorf("billing: scan payment method: %w", err)
+		}
+		out = append(out, &pm)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("billing: iterate payment methods: %w", err)
+	}
+	return out, nil
+}
+
+// nullString maps an empty string to a SQL NULL for nullable text columns.
+func nullString(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
 type rowScanner interface {
 	Scan(dest ...any) error
 }

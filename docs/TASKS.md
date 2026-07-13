@@ -352,8 +352,8 @@ must be bootstrapped out of band. Wire owner-on-create (or bridge
 
 ### T-021 · Subscription: renewal + trial jobs · **M** · ✅ DONE (PR #26)
 **Depends on**: T-006, T-019 (T-020 for scheduled-change application).
-**Note (implemented)**: exactly-once emission is gated by a `renewal_emitted_period_end` marker on the subscription (not by advisory state), so duplicate ticks and multiple runners still yield one `subscription.renewal_due` per period. `BILLING_DISABLED` (default `true` until T-026) makes the renewal auto-advance the period; when billing is enabled the period advances only when the module's idempotent `billing.invoice_paid` consumer fires. Trial resolution keys off the plan version's `card_required`: no card → convert to active (starting the first paid period at the trial end); card required → expire (no payment method on file yet). `SUBSCRIPTION_TRIAL_ENDING_DAYS` (default 3) sets the pre-expiry `TrialEnding` lead time. Frontend: none (no new user-facing endpoints; renewal/trial are background jobs surfaced through the existing subscription view — F-009).
-**Deliverables**: recurring job scanning due subscriptions: emits `SubscriptionRenewalDue`, applies scheduled changes at rollover, advances period only after `InvoicePaid` (config flag `billing.disabled=true` auto-advances until T-026); trial job: `TrialEnding` (configurable days before), `TrialEnded` → convert or expire per plan config.
+**Note (implemented)**: exactly-once emission is gated by a `renewal_emitted_period_end` marker on the subscription (not by advisory state), so duplicate ticks and multiple runners still yield one `subscription.renewal_due` per period. `BILLING_DISABLED` (still the default `true`) makes the renewal auto-advance the period; when billing is enabled (`BILLING_DISABLED=false`) the period advances only when the module's idempotent `billing.invoice_paid` consumer fires — and as of T-026 that event is produced by the real charge flow (billing consumes `renewal_due` → issue → charge → `invoice_paid`), so `BILLING_DISABLED=false` now exercises billing end to end. Trial resolution keys off the plan version's `card_required`: no card → convert to active (starting the first paid period at the trial end); card required → expire (no payment method on file yet). `SUBSCRIPTION_TRIAL_ENDING_DAYS` (default 3) sets the pre-expiry `TrialEnding` lead time. Frontend: none (no new user-facing endpoints; renewal/trial are background jobs surfaced through the existing subscription view — F-009).
+**Deliverables**: recurring job scanning due subscriptions: emits `SubscriptionRenewalDue`, applies scheduled changes at rollover, advances period only after `InvoicePaid` (config flag `billing.disabled=true` auto-advances; T-026 makes the real charge flow produce `InvoicePaid` when billing is enabled); trial job: `TrialEnding` (configurable days before), `TrialEnded` → convert or expire per plan config.
 **Acceptance criteria**: renewal emission is exactly-once per period even with duplicate ticks/replicas; trial events fire at the right frozen-clock moments; the billing-disabled path keeps the module testable standalone.
 **Expected tests** (integration, frozen clock):
 - `TestRenewalDueEmittedExactlyOncePerPeriod` — duplicate job ticks + idempotent consumer ⇒ one event.
@@ -503,7 +503,8 @@ Design points:
 - **Lifecycle** is a guarded transition table in the pure domain.
 - **Event seam.** Paying an invoice publishes `billing.invoice_paid` (exact type)
   via the outbox with the `subscription_id`, so the subscription module's existing
-  idempotent consumer works. The PaymentProvider/charge flow stays in T-026.
+  idempotent consumer works. The PaymentProvider/charge flow that drives this
+  automatically on renewal landed in T-026.
 - REST under `/api/v1/billing/invoices` (tenant-scoped, auth-required):
   `POST` (issue), `GET` (list), `GET /{id}`, `POST /{id}/{pay,void,uncollectible}`,
   `POST|GET /{id}/credit-notes`. `ports.BillingReader` exposes GetInvoice/ListInvoices.
@@ -521,11 +522,12 @@ Design points:
 - integration: `TestCreditNoteReferencesInvoiceAndNegatesAmounts`.
 - integration (HTTP): `TestInvoiceListGetScopedToTenant` — other tenant's invoices invisible.
 
-### T-026 · Billing: `PaymentProvider` port, fake provider, charge flow · **L**
+### T-026 · Billing: `PaymentProvider` port, fake provider, charge flow · **L** · ✅ DONE (PR #NN)
 **Depends on**: T-021, T-025.
 **Deliverables**: `PaymentProvider` port (`CreateCustomer`, `AttachPaymentMethod`, `Charge(idempotencyKey, …)`, `Refund`, `TranslateWebhook`); `fakeprovider` (auto-succeeds, programmable failures, records calls); payment-method storage (tokens only); idempotent consumer of `SubscriptionRenewalDue`: invoice → charge → `InvoicePaid` | `PaymentFailed`; provider idempotency keys derived from (invoice, attempt); subscription consumes `InvoicePaid` to advance period (removes `billing.disabled` path).
+**Note (implemented)**: `PaymentProvider` is a service-level driven port modeled like `TaxCalculator`; the default adapter is `internal/adapters/fakeprovider` (injected by `billing.New`, overridable with `billing.WithPaymentProvider` for a real gateway). Provider idempotency keys are `charge:<invoiceID>:<attempt>` (attempt 1 for the initial renewal; dunning uses higher attempts in T-027). The renewal charge flow is the billing module's idempotent `subscription.renewal_due` consumer (`events.Idempotent`, consumer `"billing"`): it issues the invoice, charges, then pays (publishing `billing.invoice_paid`) or publishes `billing.payment_failed` and leaves the invoice open. Billing only subscribes to `renewal_due` when `BILLING_DISABLED=false`, so exactly one path advances a period: with billing enabled the real charge flow drives it; with `BILLING_DISABLED=true` (still the default) the subscription's renewal job auto-advances as before. Payment methods store **tokens only** — a `NewPaymentMethod` domain guard plus a schema `token_not_pan` CHECK both reject a raw PAN (`migrations/billing/00002_payment_methods.sql`). No sqlc drift (sqlc reads only `migrations/platform`). Frontend: none (no new HTTP endpoints — the charge flow is event-driven; payment-method entry is a Go module method surfaced later by an F-card).
 **Acceptance criteria**: duplicate renewal events cause exactly one charge; provider is swappable behind the port (fake proves the contract); raw payment credentials never persisted.
-**Expected tests**:
+**Expected tests** — all implemented and green:
 - integration: `TestRenewalFlowChargeSucceedsInvoicePaidPeriodAdvances` — full loop with fakeprovider.
 - integration: `TestRenewalFlowChargeFailsEmitsPaymentFailed` — invoice stays open; subscription hears the event.
 - integration: `TestDuplicateRenewalDueDeliveryProducesExactlyOneCharge` — fake records one `Charge` call.

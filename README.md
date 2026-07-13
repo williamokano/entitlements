@@ -18,7 +18,7 @@ conventions.
 core) in progress.** The API boots, runs its migrations on startup, and serves
 real endpoints.
 
-Implemented (tasks **T-001 – T-025**):
+Implemented (tasks **T-001 – T-026**):
 
 - **Platform kernel** — config, UUIDv7 IDs, clock, Postgres pool + UnitOfWork
   (tx-in-context), migration runner, transactional outbox + relay worker,
@@ -127,7 +127,17 @@ Implemented (tasks **T-001 – T-025**):
   advances its period. **Credit notes** (`POST /billing/invoices/{id}/credit-notes`
   `{amount_minor, reason}`) reference an invoice and store a negated amount. List
   and get (`GET /billing/invoices[/{id}]`) are tenant-scoped — another tenant's
-  invoices are invisible. (The PaymentProvider/charge flow and dunning are T-026 /
+  invoices are invisible. A **`PaymentProvider`** port (T-026) drives the money
+  side: an in-memory **fake adapter** is the default (auto-succeeds; swap in a
+  real gateway with `billing.WithPaymentProvider`). When billing is enabled
+  (`BILLING_DISABLED=false`) billing runs an **idempotent renewal charge flow** —
+  it consumes `subscription.renewal_due`, issues the invoice, charges the
+  provider with a `(invoice, attempt)`-stable idempotency key, then publishes
+  `billing.invoice_paid` on success (subscription advances) or
+  `billing.payment_failed` on decline (invoice stays open). A duplicate renewal
+  delivery yields exactly one charge (idempotent consumer + provider key).
+  **Payment methods** are stored **tokens only** — a domain guard and a schema
+  `token_not_pan` CHECK both refuse a raw card number. (Dunning + proration are
   T-027.)
 - **Example** module (`/api/v1/example/things`) — a reference tenant-scoped
   slice demonstrating the full hexagonal shape and the outbox → consumer flow.
@@ -175,8 +185,8 @@ once, configured entirely at container start via environment variables (API URL,
 tenant mode, branding, demo toggle) — see *Running the admin SPA in Docker*
 below. `docker compose up` now brings up Postgres, the API, and the SPA together.
 
-Not yet implemented: the rest of **billing** — the PaymentProvider/charge flow
-and dunning + proration (T-026, T-027); the remaining frontend module screens
+Not yet implemented: the rest of **billing** — dunning + proration (T-027); the
+remaining frontend module screens
 (members, roles, the entitlements viewer, overrides admin, the usage/quota
 panel, and the billing invoices screen — F-005, F-007, F-010–F-013). See
 [`docs/TASKS.md`](docs/TASKS.md) for the full plan.

@@ -23,6 +23,19 @@ type InvoicePaid struct {
 	SubscriptionID uuid.UUID `json:"subscription_id"`
 }
 
+// EventPaymentFailed is published when a renewal charge is declined. The invoice
+// is left open. The subscription module will consume it for dunning
+// (past_due → grace → suspended) in T-027; for now it reports the failure.
+const EventPaymentFailed = "billing.payment_failed"
+
+// PaymentFailed is the payload of EventPaymentFailed.
+type PaymentFailed struct {
+	InvoiceID      uuid.UUID `json:"invoice_id"`
+	TenantID       uuid.UUID `json:"tenant_id"`
+	SubscriptionID uuid.UUID `json:"subscription_id"`
+	Reason         string    `json:"reason"`
+}
+
 // InvoiceInfo is the read model other modules see.
 type InvoiceInfo struct {
 	ID             uuid.UUID

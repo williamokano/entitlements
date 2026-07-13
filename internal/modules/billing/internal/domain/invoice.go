@@ -204,4 +204,9 @@ type Repository interface {
 	ListInvoices(ctx context.Context, tenantID uuid.UUID) ([]*Invoice, error)
 	CreateCreditNote(ctx context.Context, cn *CreditNote) error
 	ListCreditNotes(ctx context.Context, tenantID, invoiceID uuid.UUID) ([]*CreditNote, error)
+	// CreatePaymentMethod persists a tokenized payment method. The schema's
+	// token-only CHECK constraint is the last line of defense against a raw PAN
+	// ever landing in storage.
+	CreatePaymentMethod(ctx context.Context, pm *PaymentMethod) error
+	ListPaymentMethods(ctx context.Context, tenantID uuid.UUID) ([]*PaymentMethod, error)
 }
