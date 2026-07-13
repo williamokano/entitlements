@@ -22,9 +22,16 @@ const appRoutes: RouteObject[] = [
       { path: '/roles', Component: lazy(() => import('@/views/app/roles')) },
       { path: '/catalog', Component: lazy(() => import('@/views/app/catalog')) },
       { path: '/subscription', Component: lazy(() => import('@/views/app/subscription')) },
+      { path: '/account/security', Component: lazy(() => import('@/views/app/account/security')) },
     ],
   },
+  // Auth screens (F-003) — public; each redirects an already-authenticated user
+  // back to the app. verify-email/reset-password read their token from the URL.
   { path: '/auth/sign-in', Component: lazy(() => import('@/views/app/auth/sign-in')) },
+  { path: '/auth/sign-up', Component: lazy(() => import('@/views/app/auth/sign-up')) },
+  { path: '/auth/forgot-password', Component: lazy(() => import('@/views/app/auth/forgot-password')) },
+  { path: '/auth/reset-password', Component: lazy(() => import('@/views/app/auth/reset-password')) },
+  { path: '/auth/verify-email', Component: lazy(() => import('@/views/app/auth/verify-email')) },
 ]
 
 // The vendored Inspinia demo, mounted as a lazy splat route. The build-time

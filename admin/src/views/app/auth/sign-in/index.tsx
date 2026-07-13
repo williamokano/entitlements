@@ -1,40 +1,42 @@
-// Adapted from the theme's views/auth/basic/sign-in — wired to the real
-// auth store. The full auth suite (sign-up, recovery, …) arrives with F-003.
-import AuthLogo from '@/components/AuthLogo'
-import { currentYear, META_DATA } from '@/config/constants'
-import { isAuthenticated, subscribe } from '@/lib/auth'
+// Adapted from the theme's views/auth/basic/sign-in — wired to the real auth
+// store (F-003). Signed-in users are bounced to the app; a post-registration
+// redirect shows an "account created, sign in" banner.
 import { useSyncExternalStore } from 'react'
-import { Navigate } from 'react-router'
+import { Link, Navigate, useLocation } from 'react-router'
+import { isAuthenticated, subscribe } from '@/lib/auth'
+import AuthShell from '../components/AuthShell'
 import Form from './components/Form'
+
+type SignInState = { registered?: boolean; email?: string } | null
 
 const Page = () => {
   const authenticated = useSyncExternalStore(subscribe, isAuthenticated)
+  const location = useLocation()
+  const state = location.state as SignInState
 
   if (authenticated) {
     return <Navigate to="/" replace />
   }
 
   return (
-    <>
-      <div className="flex min-h-screen items-center p-12.5">
-        <div className="container">
-          <div className="flex justify-center px-2.5">
-            <div className="2xl:w-4/10 md:w-1/2 sm:w-2/3 w-full">
-              <div className="mb-3 flex flex-col items-center justify-center text-center">
-                <AuthLogo />
-                <h4 className="font-bold text-base text-dark mt-5 mb-2">Welcome</h4>
-                <p className="text-default-400 mx-auto w-full lg:w-3/4 mb-4">Let’s get you signed in. Enter your email and password to continue.</p>
-              </div>
-              <div className="card p-7.5 rounded-2xl">
-                <Form />
-              </div>
-
-              <p className="text-default-400 mt-7.5 text-center">© {currentYear}&nbsp;{META_DATA.name}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </>
+    <AuthShell
+      title="Welcome"
+      subtitle="Let’s get you signed in. Enter your email and password to continue."
+      footer={
+        <p className="text-default-400 mt-7.5 text-center">
+          New here?&nbsp;
+          <Link to="/auth/sign-up" className="text-primary font-semibold underline underline-offset-4">
+            Create an account
+          </Link>
+        </p>
+      }>
+      {state?.registered && (
+        <p className="text-success bg-success/10 mb-5 rounded-lg px-4 py-3 text-center text-sm" role="status">
+          Account created. Please sign in.
+        </p>
+      )}
+      <Form prefillEmail={state?.email ?? ''} />
+    </AuthShell>
   )
 }
 
