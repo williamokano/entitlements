@@ -30,7 +30,9 @@ Implemented (tasks **T-001 – T-027**):
   (claim → `X-Tenant-ID` header → subdomain), an event-driven provisioning
   pipeline, and **membership + invitations** (invite by email — including
   not-yet-registered users — accept / decline / resend with expiry, member
-  listing and removal; a user can belong to many tenants).
+  listing and removal; a user can belong to many tenants). A membership records
+  the email it was invited by, so members can be listed by name without the
+  tenant module having to look users up in another module.
 - **Authentication** module (`/api/v1/auth`) — register, login, JWT access
   tokens (EdDSA, offline-verifiable) + rotating refresh tokens with
   family-reuse detection, logout, email verification, password recovery,
@@ -203,9 +205,14 @@ Implemented (tasks **T-001 – T-027**):
   as numbers, config/enum values verbatim — plus a per-feature drill-in reusing
   `GET /api/v1/entitlements/{key}` (value, source, and any override expiry). A
   tenant with no subscription still shows its `default`-sourced rows. Overrides
-  CRUD (F-011) and the usage/quota panel (F-012) extend this page. The remaining
-  module screens (members, roles) are placeholder pages until their **F-track**
-  cards land — see [`docs/FRONTEND.md`](docs/FRONTEND.md).
+  CRUD (F-011) and the usage/quota panel (F-012) extend this page. The
+  **members** screen is live too (F-005, under `/members`): the tenant's members
+  (by email, with a remove that confirms first) and its pending invitations
+  (invite by email + role, resend), plus a **public invitation accept/decline
+  page** at `/invitations/{tenantId}/{invitationId}` — an invitee who lands on it
+  signed out is sent to sign-in and returned to the invitation afterwards. The
+  remaining module screen (roles) is a placeholder page until its **F-track**
+  card lands — see [`docs/FRONTEND.md`](docs/FRONTEND.md).
 
 The admin SPA also ships as a **generic Docker image** (F-002): one image built
 once, configured entirely at container start via environment variables (API URL,
@@ -254,6 +261,31 @@ curl -sX POST localhost:8080/api/v1/tenants \
 curl -sX POST localhost:8080/api/v1/example/things \
   -H 'content-type: application/json' -H 'X-Tenant-ID: <tenant-uuid>' \
   -d '{"name":"widget"}'
+
+# Invite someone into the tenant. The invitee needs no account yet — the
+# invitation is by email, and becomes a membership when they accept.
+curl -sX POST localhost:8080/api/v1/tenants/<tenant-uuid>/invitations \
+  -H 'content-type: application/json' \
+  -H 'Authorization: Bearer <access-token>' \
+  -d '{"email":"teammate@example.com","role":"member"}'
+# → {"id":"<invitation-uuid>","email":"teammate@example.com","role":"member",
+#    "status":"pending","expires_at":"…"}
+
+# The invitee registers + logs in as teammate@example.com, then accepts with
+# THEIR access token: the backend authorizes by matching the caller's email to
+# the invitation (there is no invite token), which is why the accept link carries
+# the tenant and invitation ids: /invitations/<tenant-uuid>/<invitation-uuid>
+curl -sX POST \
+  localhost:8080/api/v1/tenants/<tenant-uuid>/invitations/<invitation-uuid>/accept \
+  -H 'Authorization: Bearer <invitee-access-token>'
+# → 201 {"user_id":"…","email":"teammate@example.com","role":"member","status":"active"}
+
+# Members are listed with the email they were invited by
+curl -s localhost:8080/api/v1/tenants/<tenant-uuid>/members \
+  -H 'Authorization: Bearer <access-token>'
+# → {"members":[{"user_id":"…","email":"teammate@example.com","role":"member","status":"active"}]}
+# NOTE: the tenant's *creator* is not a member yet (T-031) — only accepting an
+# invitation creates a membership, so a brand-new tenant lists no members.
 
 # Mint a tenant API key (needs a user access token + the tenant), then use it —
 # a machine call derives its tenant from the key, so no X-Tenant-ID is needed

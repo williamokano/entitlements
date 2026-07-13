@@ -31,12 +31,17 @@ export const useAuth = () => {
   const [error, setError] = useState<string | null>(null)
   const isAuthenticated = useSyncExternalStore(subscribe, isAuthenticatedSnapshot)
 
-  const login = async (email: string, password: string) => {
+  /**
+   * Sign in and land on `redirectTo` — the route the user was headed for before
+   * a guard bounced them (RequireAuth stashes it in `state.from`), or the
+   * invitation they were asked to accept. Defaults to the app root.
+   */
+  const login = async (email: string, password: string, redirectTo = '/') => {
     setLoading(true)
     setError(null)
     try {
       await authLogin(email, password)
-      navigate('/', { replace: true })
+      navigate(redirectTo, { replace: true })
     } catch (err) {
       setError(messageForError(err, 'Unable to sign in. Please try again.'))
     } finally {

@@ -115,11 +115,7 @@ func acceptInvitation(svc *service.MembershipService) http.HandlerFunc {
 			httpx.WriteProblem(w, r, err)
 			return
 		}
-		httpx.WriteJSON(w, http.StatusCreated, map[string]any{
-			"user_id": view.UserID,
-			"role":    view.Role,
-			"status":  view.Status,
-		})
+		httpx.WriteJSON(w, http.StatusCreated, membershipResponse(view))
 	}
 }
 
@@ -161,7 +157,7 @@ func listMembers(svc *service.MembershipService) http.HandlerFunc {
 		}
 		out := make([]map[string]any, 0, len(members))
 		for _, m := range members {
-			out = append(out, map[string]any{"user_id": m.UserID, "role": m.Role, "status": m.Status})
+			out = append(out, membershipResponse(m))
 		}
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{"members": out})
 	}
@@ -217,6 +213,18 @@ func parsePathID(w http.ResponseWriter, r *http.Request, name, label string) (uu
 		return uuid.Nil, false
 	}
 	return id, true
+}
+
+// membershipResponse renders a membership. Email is the address the member was
+// invited by; it is empty for memberships that predate the column, and clients
+// fall back to the user id.
+func membershipResponse(m service.MembershipView) map[string]any {
+	return map[string]any{
+		"user_id": m.UserID,
+		"email":   m.Email,
+		"role":    m.Role,
+		"status":  m.Status,
+	}
 }
 
 func invitationResponse(i service.InvitationView) map[string]any {

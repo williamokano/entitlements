@@ -28,9 +28,9 @@ func NewMemberships(pool *pgxpool.Pool) *Memberships { return &Memberships{pool:
 // violation to a conflict.
 func (r *Memberships) CreateMembership(ctx context.Context, m *domain.Membership) error {
 	_, err := platformpg.Q(ctx, r.pool).Exec(ctx,
-		`INSERT INTO tenant.memberships (id, tenant_id, user_id, role, status, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		m.ID, m.TenantID, m.UserID, m.Role, string(m.Status), m.CreatedAt, m.UpdatedAt)
+		`INSERT INTO tenant.memberships (id, tenant_id, user_id, email, role, status, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		m.ID, m.TenantID, m.UserID, m.Email, m.Role, string(m.Status), m.CreatedAt, m.UpdatedAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {
@@ -48,9 +48,9 @@ func (r *Memberships) GetMembership(ctx context.Context, tenantID, userID uuid.U
 		status string
 	)
 	err := platformpg.Q(ctx, r.pool).QueryRow(ctx,
-		`SELECT id, tenant_id, user_id, role, status, created_at, updated_at
+		`SELECT id, tenant_id, user_id, email, role, status, created_at, updated_at
 		 FROM tenant.memberships WHERE tenant_id = $1 AND user_id = $2 AND status = 'active'`, tenantID, userID).
-		Scan(&m.ID, &m.TenantID, &m.UserID, &m.Role, &status, &m.CreatedAt, &m.UpdatedAt)
+		Scan(&m.ID, &m.TenantID, &m.UserID, &m.Email, &m.Role, &status, &m.CreatedAt, &m.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, apperr.NotFound("membership not found")
 	}
@@ -64,7 +64,7 @@ func (r *Memberships) GetMembership(ctx context.Context, tenantID, userID uuid.U
 // ListMembers returns a tenant's active members, newest first.
 func (r *Memberships) ListMembers(ctx context.Context, tenantID uuid.UUID) ([]*domain.Membership, error) {
 	rows, err := platformpg.Q(ctx, r.pool).Query(ctx,
-		`SELECT id, tenant_id, user_id, role, status, created_at, updated_at
+		`SELECT id, tenant_id, user_id, email, role, status, created_at, updated_at
 		 FROM tenant.memberships WHERE tenant_id = $1 AND status = 'active' ORDER BY created_at DESC`, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("tenant: list members: %w", err)
@@ -77,7 +77,7 @@ func (r *Memberships) ListMembers(ctx context.Context, tenantID uuid.UUID) ([]*d
 			m      domain.Membership
 			status string
 		)
-		if err := rows.Scan(&m.ID, &m.TenantID, &m.UserID, &m.Role, &status, &m.CreatedAt, &m.UpdatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.TenantID, &m.UserID, &m.Email, &m.Role, &status, &m.CreatedAt, &m.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("tenant: scan member: %w", err)
 		}
 		m.Status = domain.MemberStatus(status)

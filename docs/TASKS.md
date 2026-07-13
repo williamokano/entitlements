@@ -272,6 +272,29 @@ graph TD
 - `TestUserInMultipleTenantsIndependentMemberships`.
 - `TestRemoveMemberEmitsMemberLeftAndRevokesAccess`.
 - `TestMembershipReaderPortReturnsRoleRef`.
+**Amended by F-005**: a membership now stores the email it was invited by
+(`tenant.memberships.email`, migration `00003`), so `GET .../members` returns
+`{user_id, email, role, status}` and the UI can name its members. Accept() is the
+only place a membership is created and it already holds the invited email, so the
+tenant module needs no user lookup in another module — no new port, no dependency
+on authentication. Added: `TestListMembersCarriesTheInvitedEmail`,
+`TestListMembersToleratesAMembershipWithoutAnEmail` (rows predating the column
+have an empty email; clients fall back to the user id).
+
+### T-031 · Tenant creator becomes an owner-member · **S**
+**Depends on**: T-010, T-015. **Found while building F-005.**
+**Problem**: `Accept()` is the *only* path that creates a membership, so creating
+a tenant leaves you with **no membership in it** — a freshly created tenant's
+members list is legitimately empty, and its creator holds no role there. The
+authorization module seeds the tenant's roles but nothing binds the creator to
+the `owner` role.
+**Deliverables**: on tenant create, create an active `owner` membership for the
+creating user (carrying their email, per the F-005 schema). Decide whether this
+belongs in the create use case or as a provisioning hook (the hook runs through
+the outbox, so it must be idempotent and must be able to see the creator's id).
+**Expected tests** (integration): creating a tenant yields exactly one active
+owner membership for the creator; `GET /members` lists them immediately; the
+provisioning path stays idempotent under redelivery.
 
 ### T-016 · Authorization module (dynamic RBAC) · **M** · ✅ DONE (PR #19)
 **Depends on**: T-010, T-014. **Spec**: PLAN.md §3.
@@ -654,11 +677,36 @@ paired F-card).
 **Delivered**: a persisted **tenant store** (`admin/src/lib/tenant.ts`) holding the "known tenants" list + current tenant id (localStorage, subscribe/get/set like the token store); every created/loaded tenant is remembered. `lib/api.ts` now sends the **current tenant id** as `X-Tenant-ID` in header mode (config `tenantSlug` is only an initial fallback — fixes the F-001 follow-up that sent the slug as the id). Screens under `admin/src/views/app/tenant/`: onboarding empty state (gated by new `RequireTenant`, header mode only), settings (`/tenant` — loads `GET /tenants/{id}`, edits name + settings JSON, PATCH round-trip with toast; slug is read-only since the backend PATCH fixes it), a danger zone (suspend/reactivate/delete via a shared `lib/confirm.ts` sweetalert2 confirm — delete drops the tenant from the store and falls back to onboarding/another tenant), a create-another screen (`/tenant/new`), and a **TenantSwitcher** in the TopBar (header mode; lists known tenants, selecting one sets it current so the next request carries its id, plus a Create action). Routes wired in `routes/index.tsx`; the "Tenant" menu item points at settings. Tests (MSW + RTL): `CreateTenant.test.tsx`, `TenantSettings.test.tsx`, `DangerZone.test.tsx`, `TenantSwitcher.test.tsx`.
 **Backend follow-up**: **`GET /api/v1/tenants` (list the current user's tenant memberships) is needed for a full switcher** — the API cannot enumerate a user's tenants today, so the switcher is built over a locally-persisted "known tenants" store (tenants the user created or successfully loaded). Also: the tenant PATCH does not accept a slug change and the tenant response does not echo `settings` (the UI preserves the sent settings locally).
 
-### F-005 · Members & invitations screens · **M** *(backend: T-015 — merged)*
+### F-005 · Members & invitations screens · **M** *(backend: T-015 — merged)* · ✅ DONE (PR #NN)
 **Depends on**: F-001.
-**Screens** (adapt `users/contacts` + `DataTable`): members list with remove, invitations list with invite form (email + role) and resend, and the public invitation accept/decline page.
+**Screens**: members list with remove, invitations list with invite form (email + role) and resend, and the public invitation accept/decline page.
 **Endpoints**: `POST|GET /api/v1/tenants/{id}/invitations`, `POST .../invitations/{invId}/{resend,accept,decline}`, `GET /api/v1/tenants/{id}/members`, `DELETE /api/v1/tenants/{id}/members/{userId}`.
 **Expected tests** (MSW): members table renders and remove confirms first; invite form validates email; accept page drives the accept endpoint then routes onward (sign-in when anonymous).
+
+**Shipped with a backend change** (amends T-015): `GET .../members` returned only
+`{user_id, role, status}`, so the table could only show UUIDs. The tenant module
+now stores the email a member was invited by (see T-015's amendment) — no new
+port and no dependency on the authentication module.
+
+**Also fixed**: post-sign-in redirect. `RequireAuth` already stashed `state.from`,
+but `useAuth.login` hardcoded `navigate('/')` and dropped it, so redirect-back was
+dead code. `login` now takes a redirect target and the sign-in page passes
+`state.from` — which every guarded route benefits from, not just the invitation
+page (it depends on it: an anonymous invitee signs in and lands back on the
+invitation).
+
+**Notes**: the invite role picker reads `GET /api/v1/roles` so custom roles are
+invitable, falling back to the seeded `owner|admin|member` when roles are
+unreadable. That fallback is **load-bearing today, not defensive**: because the
+tenant creator gets no membership (**T-031**), they hold no role, so `role:read`
+is denied and `GET /api/v1/roles` returns **403 for the very person doing the
+inviting** — verified against a live server. Without the fallback the invite form
+would be broken for everyone. Once T-031 lands, the picker starts showing the
+tenant's real roles with no further change.
+The accept/decline page is public and takes both ids
+(`/invitations/:tenantId/:invId`) because there is no invite token — the backend
+authorizes by matching the signed-in user's email. A newly created tenant also
+shows an empty members list until someone accepts an invitation (T-031 again).
 
 ### F-006 · API keys screen · **S** · ✅ DONE (PR #27) *(backend: T-014 — merged)*
 **Depends on**: F-001.

@@ -42,9 +42,11 @@ type InvitationView struct {
 	CreatedAt time.Time
 }
 
-// MembershipView is a read model of a membership.
+// MembershipView is a read model of a membership. Email is the address the
+// member was invited by; it is empty for memberships that predate the column.
 type MembershipView struct {
 	UserID uuid.UUID
+	Email  string
 	Role   string
 	Status string
 }
@@ -119,6 +121,7 @@ func (s *MembershipService) Accept(ctx context.Context, tenantID, invitationID, 
 			ID:        s.ids.New(),
 			TenantID:  tenantID,
 			UserID:    userID,
+			Email:     inv.Email,
 			Role:      inv.Role,
 			Status:    domain.MemberActive,
 			CreatedAt: now,
@@ -140,7 +143,7 @@ func (s *MembershipService) Accept(ctx context.Context, tenantID, invitationID, 
 		}); err != nil {
 			return err
 		}
-		view = MembershipView{UserID: userID, Role: inv.Role, Status: string(domain.MemberActive)}
+		view = MembershipView{UserID: userID, Email: inv.Email, Role: inv.Role, Status: string(domain.MemberActive)}
 		return nil
 	})
 	return view, err
@@ -191,7 +194,7 @@ func (s *MembershipService) ListMembers(ctx context.Context, tenantID uuid.UUID)
 	}
 	views := make([]MembershipView, 0, len(members))
 	for _, m := range members {
-		views = append(views, MembershipView{UserID: m.UserID, Role: m.Role, Status: string(m.Status)})
+		views = append(views, MembershipView{UserID: m.UserID, Email: m.Email, Role: m.Role, Status: string(m.Status)})
 	}
 	return views, nil
 }

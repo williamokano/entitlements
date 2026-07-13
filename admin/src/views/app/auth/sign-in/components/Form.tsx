@@ -5,9 +5,11 @@ import { useAuth } from '@/hooks/useAuth'
 type FormProps = {
   /** Prefilled email, e.g. carried over from the sign-up redirect. */
   prefillEmail?: string
+  /** Where to land after signing in; defaults to the app root. */
+  redirectTo?: string
 }
 
-const Form = ({ prefillEmail = '' }: FormProps) => {
+const Form = ({ prefillEmail = '', redirectTo }: FormProps) => {
   const { login, loading, error } = useAuth()
 
   const [form, setForm] = useState({
@@ -22,7 +24,7 @@ const Form = ({ prefillEmail = '' }: FormProps) => {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    await login(form.email, form.password)
+    await login(form.email, form.password, redirectTo)
   }
 
   return (
