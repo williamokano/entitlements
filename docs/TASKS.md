@@ -620,7 +620,7 @@ paired F-card).
 **Endpoints**: `GET|POST /api/v1/roles`, `GET|PATCH|DELETE /api/v1/roles/{id}`, `POST /api/v1/roles/{id}/assignments`, `DELETE /api/v1/roles/{id}/assignments/{userId}`.
 **Expected tests** (MSW): system roles hide delete; create posts the permissions array; a 403 from the permission guard renders an access-denied state, not a crash.
 
-### F-008 · Catalog admin screens · **L** *(backend: T-017, T-018 — merged)* · ✅ DONE (PR #TBD)
+### F-008 · Catalog admin screens · **L** *(backend: T-017, T-018 — merged)* · ✅ DONE (PR #35)
 **Depends on**: F-001.
 **Screens**: plans list (status, public badge); plan detail with versions timeline; version editor — editable **only while draft** (pricing per cycle in minor units, trial config, grace days, features/limits), publish with immutability warning, archive, public toggle; addons list/detail/versions (entitlement deltas + compatible plans); public pricing preview reusing `pages/pricing` bound to `GET /api/v1/catalog/public`.
 **Endpoints**: the full catalog surface (`/api/v1/catalog/plans...`, `/versions/{vid}`, `/public`, `/addons...`, `/addon-versions/{vid}`).
