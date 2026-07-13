@@ -14,6 +14,7 @@ import (
 	"github.com/williamokano/entitlements/internal/modules/authentication"
 	"github.com/williamokano/entitlements/internal/modules/authorization"
 	"github.com/williamokano/entitlements/internal/modules/catalog"
+	"github.com/williamokano/entitlements/internal/modules/entitlements"
 	"github.com/williamokano/entitlements/internal/modules/example"
 	"github.com/williamokano/entitlements/internal/modules/subscription"
 	"github.com/williamokano/entitlements/internal/modules/tenant"
@@ -81,12 +82,16 @@ func buildApplication(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger
 	if err := subscriptionMod.RegisterJobs(deps.Jobs); err != nil {
 		return nil, fmt.Errorf("register subscription jobs: %w", err)
 	}
+	// Entitlements resolves plan grants + addon deltas + overrides into a tenant's
+	// effective set, reading the catalog and subscription through their ports.
+	entitlementsMod := entitlements.New(deps, catalogMod.Port(), subscriptionMod.Port())
 	modules := []app.Module{
 		tenantMod,
 		authMod,
 		authzMod,
 		catalogMod,
 		subscriptionMod,
+		entitlementsMod,
 		example.New(deps),
 	}
 

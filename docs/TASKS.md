@@ -363,8 +363,35 @@ must be bootstrapped out of band. Wire owner-on-create (or bridge
 - `TestTrialEndingEmittedConfiguredDaysBefore`.
 - `TestTrialEndedConvertsToActiveOrExpiresPerPlanConfig` — both branches.
 
-### T-022 · Entitlements: feature registry + resolution pipeline · **L** ← core of the product
+### T-022 · Entitlements: feature registry + resolution pipeline · **L** ← core of the product · ✅ DONE (PR #<pending>)
 **Depends on**: T-017, T-019. **Spec**: PLAN.md §6.
+
+**Implementation notes** (PR #<pending>): shipped `internal/modules/entitlements/`
+(hexagonal) + `migrations/entitlements/00001_entitlements.sql` (`features`,
+`effective_entitlements`, `tenant_overrides`). Design points worth recording:
+- **Reads resolve live, materialization powers the change feed.** `GET
+  /entitlements[/{key}]` and `ports.EntitlementsReader` compute the effective set
+  live from the registry + subscription/catalog ports + overrides, so responses
+  are never stale. `effective_entitlements` is the materialized cache that idempotent
+  event consumers rebuild; its only behavioural role is the diff that decides
+  whether to publish `EntitlementsSummaryChanged` (exactly one per real change,
+  nothing on a no-op).
+- **Subscription port extension** (the allowed cross-module change): added
+  `ports.AddonAttachment` + `SubscriptionReader.GetAttachedAddons(ctx, subID)`,
+  implemented on the subscription service over `repo.ListAddons`. The resolver
+  reads it to apply addon deltas × quantity.
+- **enum allowed-set** lives in the feature's `metadata.allowed_values` (no extra
+  column), read by the domain when constraining enum values.
+- **Feature-registry CRUD is service-level** (create/list/get/update/archive),
+  exposed via `Module.Service()` for provisioning/seeding; no admin HTTP routes
+  were added (registry admin API stays out of the T-022 HTTP surface, which the
+  card scopes to the two runtime GETs). Key and type are immutable on update.
+- **Consumers**: `subscription.transitioned|plan_changed|addon_changed`, each
+  `events.Idempotent`-wrapped, re-materialize the tenant. Catalog/override event
+  wiring deferred (overrides land in T-023) — kept scope tight.
+- **Config**: `ENTITLEMENTS_UNKNOWN_FEATURE_POLICY` (`deny` default | `allow`).
+- Paired frontend: **F-010** (entitlements viewer) added below.
+
 **Deliverables**: feature registry CRUD (`key` — the stable external identifier, the analog of Stripe's `lookup_key`; `type: boolean|limit|config|enum`, default, description, `limit_behavior: soft|hard`, `reset_period`, arbitrary `metadata` JSONB, and an `active` flag so features are **archived, not deleted**); resolution pipeline plan grants → addon deltas (×quantity) → tenant overrides ⇒ effective set; materialized `effective_entitlements` rebuilt by idempotent consumers of subscription/catalog/override events; on every change to a tenant's effective set, publish `EntitlementsSummaryChanged` carrying the full re-resolved set (the analog of Stripe's `active_entitlement_summary.updated`, and the phase-2 webhook feed); unknown-feature policy (`default_deny|default_allow`) from config; runtime REST `GET /entitlements`, `GET /entitlements/{key}`; `ports.EntitlementsReader.Get`.
 **Out of scope**: overrides CRUD (T-023), usage/consume (T-024).
 **Acceptance criteria**: precedence is exactly plan < addon < override; the canonical "plan 10 + addon 10 ⇒ 20" case holds; materialization converges after any relevant event; unknown keys resolve per policy; archived features stop granting but keep existing rows/audit coherent; a change to a tenant's effective set emits exactly one `EntitlementsSummaryChanged` with the full set.
@@ -574,6 +601,19 @@ paired F-card).
 **Screens**: a "Billing → Subscription" page: current-subscription card (status chip per state, current period, trial countdown, cancel-at-period-end banner); when none, a subscribe flow (public plan + billing-cycle picker); lifecycle actions **rendered from the state machine** so only legal actions show (cancel immediate/at-period-end modal, pause, resume, reactivate). Plus (T-020): a **change-plan flow** (pick plan+cycle; on response show either the new pin or a "scheduled for period end" banner with a cancel-change button) and an **addons section** (attached addons with quantity steppers, attach from compatible published addons, detach with confirm).
 **Endpoints**: `POST|GET /api/v1/subscription`, `POST /api/v1/subscription/{cancel,pause,resume,reactivate,change-plan}`, `POST /api/v1/subscription/scheduled-change/cancel`, `POST /api/v1/subscription/addons`, `DELETE /api/v1/subscription/addons/{vid}`.
 **Expected tests** (MSW): active shows pause+cancel and not resume; paused shows resume; the cancel modal posts `immediate` true/false correctly; a 409 renders a conflict toast; the empty state shows the plan picker; a downgrade response renders the scheduled-change banner and its cancel button calls the endpoint; addon attach validates quantity and a 400 (incompatible) renders inline.
+
+### F-010 · Entitlements viewer · **S** *(backend: T-022 — merged)*
+**Depends on**: F-001.
+**Screens**: a read-only "Billing → Entitlements" page for the current tenant:
+a table of the tenant's effective entitlements (feature key, value, and a source
+badge — `plan | addon | override | default`), fed by a single `GET
+/api/v1/entitlements` call. Booleans render as on/off chips, limits as numbers,
+config/enum as their value. A per-feature drill-in reuses `GET
+/api/v1/entitlements/{key}`. No mutation — overrides CRUD is F-paired with T-023.
+**Endpoints**: `GET /api/v1/entitlements`, `GET /api/v1/entitlements/{key}`.
+**Expected tests** (MSW): the table renders the whole set from one call; the
+source badge reflects the winning layer; an empty/no-subscription tenant shows
+only `default`-sourced rows.
 
 ---
 

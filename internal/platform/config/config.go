@@ -60,6 +60,11 @@ type Config struct {
 	// TrialEndingDays is how many days before a trial ends the TrialEnding event
 	// fires.
 	TrialEndingDays int `env:"SUBSCRIPTION_TRIAL_ENDING_DAYS" envDefault:"3"`
+
+	// EntitlementsUnknownFeaturePolicy decides how resolution treats a feature key
+	// referenced by a plan/addon/override but absent from the registry: "deny"
+	// (default) drops it, "allow" keeps it.
+	EntitlementsUnknownFeaturePolicy string `env:"ENTITLEMENTS_UNKNOWN_FEATURE_POLICY" envDefault:"deny"`
 }
 
 // IsProduction reports whether the configuration targets production.

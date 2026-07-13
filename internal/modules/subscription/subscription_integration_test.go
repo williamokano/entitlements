@@ -370,6 +370,37 @@ func TestAddonAttachDetachEmitsSubscriptionAddonChanged(t *testing.T) {
 	}
 }
 
+func TestGetAttachedAddonsReturnsAttachmentsForEntitlements(t *testing.T) {
+	deps := newDeps(t)
+	mod := subscription.New(deps, fakeCatalog{})
+	tenantID, userID := uuid.New(), uuid.New()
+	srv := serverFor(mod.Handler(), tenantID, userID)
+	defer srv.Close()
+	ctx := context.Background()
+
+	if status, _ := post(t, srv.URL, `{"plan_version_id":"`+uuid.NewString()+`","cycle":"monthly"}`); status != http.StatusCreated {
+		t.Fatal("create")
+	}
+	av := uuid.New()
+	if status, _ := post(t, srv.URL+"/addons", `{"addon_version_id":"`+av.String()+`","quantity":4}`); status != http.StatusOK {
+		t.Fatal("attach addon")
+	}
+
+	var subID uuid.UUID
+	if err := deps.Pool.QueryRow(ctx, `SELECT id FROM subscription.subscriptions WHERE tenant_id = $1`, tenantID).Scan(&subID); err != nil {
+		t.Fatalf("find subscription: %v", err)
+	}
+
+	// The port the entitlements resolver reads: addon version id + quantity.
+	attachments, err := mod.Port().GetAttachedAddons(ctx, subID)
+	if err != nil {
+		t.Fatalf("GetAttachedAddons: %v", err)
+	}
+	if len(attachments) != 1 || attachments[0].AddonVersionID != av || attachments[0].Quantity != 4 {
+		t.Fatalf("attachments = %+v, want one {%s, 4}", attachments, av)
+	}
+}
+
 func TestUnauthenticatedSubscriptionRouteRejected(t *testing.T) {
 	deps := newDeps(t)
 	mod := subscription.New(deps, fakeCatalog{})

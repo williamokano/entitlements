@@ -18,7 +18,7 @@ conventions.
 core) in progress.** The API boots, runs its migrations on startup, and serves
 real endpoints.
 
-Implemented (tasks **T-001 – T-021**):
+Implemented (tasks **T-001 – T-022**):
 
 - **Platform kernel** — config, UUIDv7 IDs, clock, Postgres pool + UnitOfWork
   (tx-in-context), migration runner, transactional outbox + relay worker,
@@ -72,6 +72,22 @@ Implemented (tasks **T-001 – T-021**):
   advance the period on `invoice_paid` (or immediately while `BILLING_DISABLED`),
   and fire `trial_ending` / `trial_ended` — converting or expiring the trial per
   the plan's `card_required` config.
+- **Entitlements** module (`/api/v1/entitlements`) — the product core: a dynamic
+  **feature registry** (features are data — `key ≈ Stripe lookup_key`, `type:
+  boolean | limit | config | enum`, default, `limit_behavior`, `reset_period`,
+  `metadata`, and an `active` flag so features are archived, not deleted; a new
+  feature needs no deploy). The **resolution pipeline** composes plan-version
+  grants → addon deltas (× quantity) → tenant overrides with precedence exactly
+  `plan < addon < override` (the canonical "plan 10 + addon 10 ⇒ 20" case). The
+  effective set is **materialized per tenant** and rebuilt by idempotent consumers
+  of subscription events; on every real change entitlements publishes exactly one
+  `EntitlementsSummaryChanged` carrying the full re-resolved set (the phase-2
+  webhook feed). Runtime reads — `GET /entitlements` (whole set in one call) and
+  `GET /entitlements/{key}` — resolve live, so they are never stale; an
+  `ENTITLEMENTS_UNKNOWN_FEATURE_POLICY` (`deny` default) governs keys absent from
+  the registry. Overrides CRUD (T-023) and usage/consume (T-024) are the next
+  cards. (Registry admin CRUD is service-level for now; the runtime HTTP surface
+  is the two GETs.)
 - **Example** module (`/api/v1/example/things`) — a reference tenant-scoped
   slice demonstrating the full hexagonal shape and the outbox → consumer flow.
 
@@ -150,6 +166,17 @@ curl -sX POST localhost:8080/api/v1/example/things \
   -H 'content-type: application/json' \
   -H 'Authorization: ApiKey ak_….<secret>' \
   -d '{"name":"via-key"}'
+
+# Read the tenant's effective entitlements in a single call (resolved live from
+# the pinned plan version's grants + attached addon deltas + tenant overrides).
+# The canonical case: a plan granting seats=10 plus an addon with a +10 limit
+# delta at quantity 1 resolves to 20, source "addon":
+curl -s localhost:8080/api/v1/entitlements \
+  -H 'Authorization: Bearer <access-token>' -H 'X-Tenant-ID: <tenant-uuid>'
+# → {"entitlements":{"seats":{"value":20,"source":"addon"}, …}}
+curl -s localhost:8080/api/v1/entitlements/seats \
+  -H 'Authorization: Bearer <access-token>' -H 'X-Tenant-ID: <tenant-uuid>'
+# → {"key":"seats","value":20,"source":"addon"}
 ```
 
 Verification and password-reset emails are **logged, not sent** by the dev
