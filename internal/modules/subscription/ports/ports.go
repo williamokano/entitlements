@@ -127,7 +127,17 @@ type SubscriptionInfo struct {
 	CancelAtPeriodEnd  bool
 }
 
+// AddonAttachment is an addon version attached to a subscription, with its
+// quantity. The entitlements resolver reads these to apply addon deltas
+// (× quantity) on top of the plan's base grants.
+type AddonAttachment struct {
+	AddonVersionID uuid.UUID
+	Quantity       int
+}
+
 // SubscriptionReader is the subscription module's facade for other modules.
 type SubscriptionReader interface {
 	GetLiveForTenant(ctx context.Context, tenantID uuid.UUID) (SubscriptionInfo, error)
+	// GetAttachedAddons returns a subscription's attached addons with quantities.
+	GetAttachedAddons(ctx context.Context, subscriptionID uuid.UUID) ([]AddonAttachment, error)
 }

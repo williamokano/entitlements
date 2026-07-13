@@ -204,6 +204,20 @@ func (s *Service) GetLiveForTenant(ctx context.Context, tenantID uuid.UUID) (por
 	}, nil
 }
 
+// GetAttachedAddons implements ports.SubscriptionReader: the subscription's
+// attached addons with quantities (the entitlements resolver reads these).
+func (s *Service) GetAttachedAddons(ctx context.Context, subscriptionID uuid.UUID) ([]ports.AddonAttachment, error) {
+	addons, err := s.repo.ListAddons(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ports.AddonAttachment, 0, len(addons))
+	for _, a := range addons {
+		out = append(out, ports.AddonAttachment{AddonVersionID: a.AddonVersionID, Quantity: a.Quantity})
+	}
+	return out, nil
+}
+
 func (s *Service) applyForTenant(ctx context.Context, event domain.Event, reason string) (View, error) {
 	sub, err := s.liveForTenant(ctx)
 	if err != nil {
