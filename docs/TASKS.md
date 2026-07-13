@@ -724,7 +724,7 @@ Optionally a "consume"/"release" affordance for demo/testing. Consume surfaces t
 over its limit shows the over-limit indicator; a consume that returns 422 surfaces
 the quota-exceeded message; an unlimited feature renders without a bar.
 
-### F-013 · Billing invoices screen · **M** *(backend: T-025 — merged)*
+### F-013 · Billing invoices screen · ✅ **Done** (PR #NN) · **M** *(backend: T-025 — merged)*
 **Depends on**: F-009.
 **Screens**: a Billing page listing the tenant's invoices (number, status, issued
 date, currency, total in minor units formatted to the currency) with a detail view

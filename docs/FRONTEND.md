@@ -43,7 +43,7 @@ Inspinia v5.0.0 React edition (WebAppLayers), a commercial admin template:
 | Tenants | `views/admin/apps/companies`, `account-settings` |
 | Catalog plans/pricing | `views/admin/pages/pricing`, ecommerce product pages |
 | Subscription | `views/admin/pages/pricing` + `account-settings` billing patterns |
-| Billing invoices (future) | `views/admin/apps/invoice/{list,details,create}` |
+| Billing invoices (`/api/v1/billing`) | `views/admin/apps/invoice/{list,details,create}` |
 
 ## 2. Structure: real app at `/`, theme demo on the side
 

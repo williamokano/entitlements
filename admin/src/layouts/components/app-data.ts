@@ -67,6 +67,12 @@ export const appMenuItems: MenuItemType[] = [
         slug: 'app:subscription',
         label: 'Subscription',
       },
+      {
+        url: '/billing',
+        icon: 'receipt',
+        slug: 'app:billing',
+        label: 'Invoices',
+      },
     ],
   },
   ...(appConfig().enableDemo
