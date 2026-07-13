@@ -132,9 +132,15 @@ Implemented (tasks **T-001 – T-024**):
   suspend/reactivate/delete with a confirm), and a **tenant switcher** in the
   TopBar — the api client sends the selected tenant's id as `X-Tenant-ID` (over a
   locally-persisted "known tenants" store, since there is no list-my-tenants
-  endpoint yet). The remaining module screens (members, roles, catalog,
-  subscription) are placeholder pages until their **F-track** cards land — see
-  [`docs/FRONTEND.md`](docs/FRONTEND.md).
+  endpoint yet). The **catalog** admin is live too (F-008, under `/catalog`):
+  plans list (status + public badge) and detail with a versions timeline; a
+  version editor that is editable **only while draft** (pricing per cycle in
+  integer minor units, trial/grace config, feature grants) and read-only once
+  published, with publish gated behind an immutability confirm; add-ons
+  list/detail/versions with an entitlement-deltas + compatible-plans editor; and
+  a public **pricing preview** bound to `GET /catalog/public`. The remaining
+  module screens (members, roles, subscription) are placeholder pages until their
+  **F-track** cards land — see [`docs/FRONTEND.md`](docs/FRONTEND.md).
 
 The admin SPA also ships as a **generic Docker image** (F-002): one image built
 once, configured entirely at container start via environment variables (API URL,
@@ -142,8 +148,8 @@ tenant mode, branding, demo toggle) — see *Running the admin SPA in Docker*
 below. `docker compose up` now brings up Postgres, the API, and the SPA together.
 
 Not yet implemented: **billing** (the rest of Milestone 3); the remaining
-frontend module screens (members, roles, catalog, subscription, the entitlements
-viewer + overrides admin, and the usage/quota panel — F-005, F-007–F-012). See
+frontend module screens (members, roles, subscription, the entitlements viewer,
+overrides admin, and the usage/quota panel — F-005, F-007, F-009–F-012). See
 [`docs/TASKS.md`](docs/TASKS.md) for the full plan.
 (Note: the tenant creator is not yet auto-assigned the `owner` role, so an
 initial role assignment currently has to be bootstrapped out of band — see the
