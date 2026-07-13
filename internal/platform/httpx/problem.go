@@ -34,6 +34,8 @@ func statusForKind(k apperr.Kind) int {
 		return http.StatusNotFound
 	case apperr.KindConflict:
 		return http.StatusConflict
+	case apperr.KindQuotaExceeded:
+		return http.StatusUnprocessableEntity
 	default:
 		return http.StatusInternalServerError
 	}

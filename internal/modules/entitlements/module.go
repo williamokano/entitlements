@@ -102,6 +102,10 @@ func (m *Module) Subscriptions() []app.Subscription {
 // Port returns the entitlements reader other modules use.
 func (m *Module) Port() ports.EntitlementsReader { return m.svc }
 
+// UsagePort returns the metered-quota facade other modules use to consume,
+// release, and read usage against a tenant's effective limits.
+func (m *Module) UsagePort() ports.UsageReader { return m.svc }
+
 // Service exposes the use cases for the composition root's provisioning/seeding
 // and for tests (feature-registry CRUD, Resolve, Materialize).
 func (m *Module) Service() *service.Service { return m.svc }
