@@ -13,6 +13,7 @@
  */
 
 import { appConfig } from './config'
+import { getCurrentTenantId } from './tenant'
 import { clearTokens, getAccessToken, getRefreshToken, setTokens } from './tokens'
 
 export class ApiError extends Error {
@@ -98,8 +99,12 @@ function buildHeaders(options: ApiRequestOptions): Headers {
   if (options.body !== undefined && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
-  if (config.tenantMode === 'header' && config.tenantSlug && !headers.has('X-Tenant-ID')) {
-    headers.set('X-Tenant-ID', config.tenantSlug)
+  // In header tenant mode the backend expects the tenant UUID as X-Tenant-ID.
+  // The active tenant from the switcher (tenant store) wins; the static
+  // config.tenantSlug is only an initial fallback for a single-tenant deploy.
+  if (config.tenantMode === 'header' && !headers.has('X-Tenant-ID')) {
+    const tenantId = getCurrentTenantId() ?? config.tenantSlug
+    if (tenantId) headers.set('X-Tenant-ID', tenantId)
   }
   if (options.auth !== false) {
     const access = getAccessToken()
