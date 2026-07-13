@@ -643,7 +643,7 @@ paired F-card).
 **Endpoints**: the full catalog surface (`/api/v1/catalog/plans...`, `/versions/{vid}`, `/public`, `/addons...`, `/addon-versions/{vid}`).
 **Expected tests** (MSW): editor fields disabled for a published version; publish requires the confirm; pricing preview renders public plans; addon delta rows validate feature keys and integer amounts (minor units — no floats anywhere in the UI layer either).
 
-### F-009 · Subscription screen · **M** *(backend: T-019, T-020 — merged)* · ✅ DONE (PR #TBD)
+### F-009 · Subscription screen · **M** *(backend: T-019, T-020 — merged)* · ✅ DONE (PR #37)
 **Depends on**: F-001, F-008 (reuses the plan/pricing picker components).
 **Screens**: a "Billing → Subscription" page: current-subscription card (status chip per state, current period, trial countdown, cancel-at-period-end banner); when none, a subscribe flow (public plan + billing-cycle picker); lifecycle actions **rendered from the state machine** so only legal actions show (cancel immediate/at-period-end modal, pause, resume, reactivate). Plus (T-020): a **change-plan flow** (pick plan+cycle; on response show either the new pin or a "scheduled for period end" banner with a cancel-change button) and an **addons section** (attached addons with quantity steppers, attach from compatible published addons, detach with confirm).
 **Endpoints**: `POST|GET /api/v1/subscription`, `POST /api/v1/subscription/{cancel,pause,resume,reactivate,change-plan}`, `POST /api/v1/subscription/scheduled-change/cancel`, `POST /api/v1/subscription/addons`, `DELETE /api/v1/subscription/addons/{vid}`.
