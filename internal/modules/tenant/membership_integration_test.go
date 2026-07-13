@@ -305,12 +305,26 @@ func TestListMembersCarriesTheInvitedEmail(t *testing.T) {
 	if err := json.Unmarshal([]byte(body), &got); err != nil {
 		t.Fatalf("decode members: %v (%s)", err, body)
 	}
-	if len(got.Members) != 1 {
-		t.Fatalf("members = %d, want 1 (%s)", len(got.Members), body)
+	// The tenant's creator is its owner (T-031), so the joiner is the second member.
+	if len(got.Members) != 2 {
+		t.Fatalf("members = %d, want 2 (the owner and the joiner) (%s)", len(got.Members), body)
 	}
-	m := got.Members[0]
-	if m.UserID != userID || m.Email != "joiner@example.com" || m.Role != "member" || m.Status != "active" {
-		t.Fatalf("member = %+v, want the joiner as an active member with their invited email", m)
+	var joinerRow *struct {
+		UserID uuid.UUID `json:"user_id"`
+		Email  string    `json:"email"`
+		Role   string    `json:"role"`
+		Status string    `json:"status"`
+	}
+	for i := range got.Members {
+		if got.Members[i].UserID == userID {
+			joinerRow = &got.Members[i]
+		}
+	}
+	if joinerRow == nil {
+		t.Fatalf("joiner not in members (%s)", body)
+	}
+	if joinerRow.Email != "joiner@example.com" || joinerRow.Role != "member" || joinerRow.Status != "active" {
+		t.Fatalf("joiner = %+v, want an active member with their invited email", *joinerRow)
 	}
 }
 
@@ -346,8 +360,122 @@ func TestListMembersToleratesAMembershipWithoutAnEmail(t *testing.T) {
 	if err := json.Unmarshal([]byte(body), &got); err != nil {
 		t.Fatalf("decode members: %v (%s)", err, body)
 	}
-	if len(got.Members) != 1 || got.Members[0].UserID != legacyUserID || got.Members[0].Email != "" {
-		t.Fatalf("members = %+v, want the legacy member with an empty email", got.Members)
+	// Alongside the creator, who is the tenant's owner (T-031).
+	var found bool
+	for _, m := range got.Members {
+		if m.UserID == legacyUserID {
+			found = true
+			if m.Email != "" {
+				t.Fatalf("legacy member email = %q, want empty", m.Email)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("legacy member not listed (%s)", body)
+	}
+}
+
+// T-031: a tenant's creator is its owner. Without this, accepting an invitation
+// would be the only way to gain a membership — so whoever created the tenant
+// would hold no membership and no role in it, and could not administer it.
+func TestCreatingATenantMakesTheCreatorAnOwnerMember(t *testing.T) {
+	deps, _ := newDeps(t)
+	mod := tenant.New(deps)
+	creatorID := uuid.New()
+	creator := serverAs(mod.Handler(), creatorID, "founder@example.com")
+	defer creator.Close()
+
+	tenantID := mkTenant(t, creator, "acme")
+
+	status, body := do(t, http.MethodGet, creator.URL+"/"+tenantID.String()+"/members", "")
+	if status != http.StatusOK {
+		t.Fatalf("list members: status %d (%s), want 200", status, body)
+	}
+	var got struct {
+		Members []struct {
+			UserID uuid.UUID `json:"user_id"`
+			Email  string    `json:"email"`
+			Role   string    `json:"role"`
+			Status string    `json:"status"`
+		} `json:"members"`
+	}
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("decode members: %v (%s)", err, body)
+	}
+	if len(got.Members) != 1 {
+		t.Fatalf("members = %d, want 1 (the creator) (%s)", len(got.Members), body)
+	}
+	m := got.Members[0]
+	if m.UserID != creatorID || m.Email != "founder@example.com" || m.Role != "owner" || m.Status != "active" {
+		t.Fatalf("member = %+v, want the creator as an active owner with their email", m)
+	}
+
+	// The membership is real, not just a row: the reader port resolves it.
+	info, err := mod.MembershipPort().GetMembership(context.Background(), tenantID, creatorID)
+	if err != nil || info.Role != "owner" || !info.Active {
+		t.Fatalf("GetMembership = (%+v, %v), want an active owner", info, err)
+	}
+}
+
+// The owner joins like anyone else, so consumers of MemberJoined see them too.
+func TestCreatingATenantEmitsMemberJoinedForTheOwner(t *testing.T) {
+	deps, bus := newDeps(t)
+	mod := tenant.New(deps)
+	var joined int
+	var mu sync.Mutex
+	bus.Subscribe(ports.EventMemberJoined, func(_ context.Context, _ events.Event) error {
+		mu.Lock()
+		joined++
+		mu.Unlock()
+		return nil
+	})
+	relay := events.NewRelay(deps.Pool, bus, deps.Clock, deps.Logger, events.RelayConfig{})
+
+	creator := serverAs(mod.Handler(), uuid.New(), "founder@example.com")
+	defer creator.Close()
+	mkTenant(t, creator, "acme")
+
+	if _, err := relay.ProcessBatch(context.Background()); err != nil {
+		t.Fatalf("relay: %v", err)
+	}
+	mu.Lock()
+	got := joined
+	mu.Unlock()
+	if got < 1 {
+		t.Fatalf("member.joined events = %d, want >= 1 (the owner)", got)
+	}
+}
+
+// Tenant creation stays open — a signup can precede any account. An anonymously
+// created tenant simply has no owner (see T-028: the signup flow decides whether
+// this path should survive).
+func TestCreatingATenantAnonymouslyStillWorksAndHasNoMembers(t *testing.T) {
+	deps, _ := newDeps(t)
+	mod := tenant.New(deps)
+	anon := httptest.NewServer(mod.Handler()) // no principal injected
+	defer anon.Close()
+
+	status, body := post(t, anon.URL, `{"slug":"acme","name":"Acme"}`)
+	if status != http.StatusCreated {
+		t.Fatalf("anonymous create: status %d (%s), want 201", status, body)
+	}
+	tenantID := idOf(t, body)
+
+	// Reading members needs a user, so ask as one — the list is empty.
+	reader := serverAs(mod.Handler(), uuid.New(), "someone@example.com")
+	defer reader.Close()
+	status, body = do(t, http.MethodGet, reader.URL+"/"+tenantID.String()+"/members", "")
+	if status != http.StatusOK {
+		t.Fatalf("list members: status %d (%s), want 200", status, body)
+	}
+	var got struct {
+		Members []struct{} `json:"members"`
+	}
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("decode members: %v (%s)", err, body)
+	}
+	if len(got.Members) != 0 {
+		t.Fatalf("members = %d, want 0 for an anonymously created tenant", len(got.Members))
 	}
 }
 

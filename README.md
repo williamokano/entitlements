@@ -253,9 +253,12 @@ curl -sX POST localhost:8080/api/v1/auth/login \
   -d '{"email":"me@example.com","password":"a-strong-password"}'
 # → {"access_token":"…","refresh_token":"…","token_type":"Bearer", …}
 
-# Create a tenant, then call a tenant-scoped route with its id
+# Create a tenant, then call a tenant-scoped route with its id. Creating it while
+# signed in makes you its owner-member; the endpoint is open, so an anonymous
+# create still works — it just leaves the tenant with no owner.
 curl -sX POST localhost:8080/api/v1/tenants \
-  -H 'content-type: application/json' -d '{"slug":"acme","name":"Acme"}'
+  -H 'content-type: application/json' \
+  -H 'Authorization: Bearer <access-token>' -d '{"slug":"acme","name":"Acme"}'
 # → {"id":"<tenant-uuid>", …}
 
 curl -sX POST localhost:8080/api/v1/example/things \
@@ -280,12 +283,13 @@ curl -sX POST \
   -H 'Authorization: Bearer <invitee-access-token>'
 # → 201 {"user_id":"…","email":"teammate@example.com","role":"member","status":"active"}
 
-# Members are listed with the email they were invited by
+# Members are listed with the email they were invited by. The tenant's creator is
+# its owner: creating a tenant while signed in makes you an owner-member of it
+# (create anonymously and the tenant simply has no owner).
 curl -s localhost:8080/api/v1/tenants/<tenant-uuid>/members \
   -H 'Authorization: Bearer <access-token>'
-# → {"members":[{"user_id":"…","email":"teammate@example.com","role":"member","status":"active"}]}
-# NOTE: the tenant's *creator* is not a member yet (T-031) — only accepting an
-# invitation creates a membership, so a brand-new tenant lists no members.
+# → {"members":[{"user_id":"…","email":"teammate@example.com","role":"member","status":"active"},
+#               {"user_id":"…","email":"me@example.com","role":"owner","status":"active"}]}
 
 # Mint a tenant API key (needs a user access token + the tenant), then use it —
 # a machine call derives its tenant from the key, so no X-Tenant-ID is needed

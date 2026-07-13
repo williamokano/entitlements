@@ -190,20 +190,32 @@ type currentUser struct {
 	email   string
 }
 
-// requireUser resolves the authenticated user principal, writing a 401 and
-// returning ok=false when the caller is not an authenticated user.
-func requireUser(w http.ResponseWriter, r *http.Request) (currentUser, bool) {
+// optionalUser resolves the authenticated user principal if there is one. The
+// auth middleware is permissive, so an anonymous request simply yields ok=false —
+// nothing is written. Use it on routes that are open but behave differently for
+// a signed-in caller (tenant creation binds an owner); use requireUser on routes
+// that demand a user.
+func optionalUser(r *http.Request) (currentUser, bool) {
 	p, ok := authctx.PrincipalFromContext(r.Context())
 	if !ok || p.Kind != authctx.PrincipalUser {
-		httpx.WriteProblem(w, r, apperr.Unauthorized("authentication required"))
 		return currentUser{}, false
 	}
 	id, err := uuid.Parse(p.Subject)
 	if err != nil {
-		httpx.WriteProblem(w, r, apperr.Unauthorized("authentication required"))
 		return currentUser{}, false
 	}
 	return currentUser{subject: id, email: p.Email}, true
+}
+
+// requireUser resolves the authenticated user principal, writing a 401 and
+// returning ok=false when the caller is not an authenticated user.
+func requireUser(w http.ResponseWriter, r *http.Request) (currentUser, bool) {
+	u, ok := optionalUser(r)
+	if !ok {
+		httpx.WriteProblem(w, r, apperr.Unauthorized("authentication required"))
+		return currentUser{}, false
+	}
+	return u, true
 }
 
 func parsePathID(w http.ResponseWriter, r *http.Request, name, label string) (uuid.UUID, bool) {

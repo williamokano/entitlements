@@ -281,20 +281,94 @@ on authentication. Added: `TestListMembersCarriesTheInvitedEmail`,
 `TestListMembersToleratesAMembershipWithoutAnEmail` (rows predating the column
 have an empty email; clients fall back to the user id).
 
-### T-031 · Tenant creator becomes an owner-member · **S**
-**Depends on**: T-010, T-015. **Found while building F-005.**
-**Problem**: `Accept()` is the *only* path that creates a membership, so creating
-a tenant leaves you with **no membership in it** — a freshly created tenant's
-members list is legitimately empty, and its creator holds no role there. The
-authorization module seeds the tenant's roles but nothing binds the creator to
-the `owner` role.
-**Deliverables**: on tenant create, create an active `owner` membership for the
-creating user (carrying their email, per the F-005 schema). Decide whether this
-belongs in the create use case or as a provisioning hook (the hook runs through
-the outbox, so it must be idempotent and must be able to see the creator's id).
-**Expected tests** (integration): creating a tenant yields exactly one active
-owner membership for the creator; `GET /members` lists them immediately; the
-provisioning path stays idempotent under redelivery.
+### T-031 · Tenant creator becomes an owner-member · **S** · ✅ DONE (PR #46)
+**Depends on**: T-010, T-015, F-005. **Found while building F-005.**
+**Problem**: `Accept()` was the *only* path that created a membership, so
+creating a tenant left you with **no membership in it** — a freshly created
+tenant's members list was empty, and its creator held no role there. The
+authorization module seeds the tenant's roles but nothing bound the creator to
+`owner`.
+**Does *not* fix the roles 403** — I assumed it would and was wrong: authorization
+resolves permissions from `authz.role_assignments`, not from the tenant
+membership's role name, and nothing ever writes an assignment. That is a separate
+defect: see **T-032**. (The `MemberJoined` event this card now publishes for the
+owner is exactly the hook T-032 needs.)
+**Delivered**: `POST /api/v1/tenants` now reads the principal — when the caller
+is an authenticated user they are written as an active `owner` member (with their
+email, per F-005) **in the same transaction** as the tenant, and a `MemberJoined`
+event is published for them so consumers (seat counts, …) see the owner like any
+other member.
+**Not a provisioning hook** (the open question in the original card, now settled):
+hooks run async off the outbox and `TenantCreated` carries only
+`{tenant_id, slug, name}` — no creator — so a hook has no user to bind. It has to
+happen in the create use case.
+**Tests** (integration): `TestCreatingATenantMakesTheCreatorAnOwnerMember`,
+`TestCreatingATenantEmitsMemberJoinedForTheOwner`,
+`TestCreateWithACreatorWritesAnOwnerMembership`,
+`TestCreateConflictRollsBackTheOwnerMembership` (no orphan membership on a
+duplicate slug), `TestCreatingATenantAnonymouslyStillWorksAndHasNoMembers`.
+
+> ⚠️ **REVIEW THIS — deliberate judgment call, easy to change.**
+> Tenant creation is currently an **open endpoint**: `cmd/api/app.go` mounts the
+> tenant handler unguarded and the auth middleware is permissive ("no credential:
+> pass through unauthenticated"), so **anyone can create a tenant anonymously** —
+> the README walkthrough and `cmd/api/app_integration_test.go` both do exactly
+> that, with no `Authorization` header.
+>
+> I therefore made owner-binding **opportunistic and non-breaking**: sign in and
+> you own what you create; stay anonymous and you get an ownerless tenant, exactly
+> as before. Nothing that worked stops working.
+>
+> The stricter alternative is to **require authentication on `POST
+> /api/v1/tenants`**, so every tenant provably has an owner and the ownerless
+> state becomes unrepresentable. That is the cleaner invariant, but it is a
+> **breaking API change** — it would 401 the anonymous path, and needs the README
+> and the e2e/integration tests updated with it.
+>
+> Which one is right depends on what **T-028 (signup flow wiring)** decides: if
+> signup always creates the account first and *then* the tenant, requiring auth
+> costs nothing and should be done. I did not want to pre-empt that decision, so
+> the safe version shipped. Revisit with T-028.
+
+### T-032 · RBAC is unbootstrappable: nothing ever assigns a role · **M** ← blocks all of `/api/v1/roles`
+**Depends on**: T-016, T-031. **Found while building F-005/T-031; verified against a live server.**
+
+**Problem.** No user can ever obtain a permission through the API, in any tenant:
+
+- `Service.Check` (authorization) resolves a user's permissions from the union of
+  the roles assigned to them in `authz.role_assignments`. It does **not** consult
+  the tenant membership's role name — despite what `ports.MembershipReader`'s doc
+  comment implies ("authorization resolves a user's role in a tenant through it").
+- The **only** thing in the codebase that writes an assignment is
+  `POST /api/v1/roles/{id}/assignments` — and that route is itself guarded by
+  `role:write`.
+- Permissions come only from assignments; assignments can only be made by someone
+  who already has a permission. **Chicken-and-egg**: the assignment table starts
+  empty and can never become non-empty.
+
+So every `/api/v1/roles/*` route 403s for every user, forever. Seeding the system
+roles (the provisioning hook) creates the roles but binds nobody to them. Today
+this is only survivable because nothing else is permission-guarded yet — but it
+means RBAC (T-016) is effectively dead code from the API's point of view, and the
+F-005 invite form only works because it falls back when roles 403.
+
+**Deliverables**: bridge membership → role assignment. The natural seam is the
+event: authorization subscribes to `tenant.member.joined` (payload carries
+`{tenant_id, user_id, role}`), resolves the role by name within that tenant, and
+writes the assignment; `tenant.member.left` unassigns. This covers **both**
+entry points into a tenant — the creator (T-031 now publishes `MemberJoined` for
+the owner) and every invitee who accepts. Keep it idempotent: the handler runs
+through the outbox and can be redelivered.
+Per the module-ownership rule, authorization must **not** import `tenant/ports` —
+declare the event name and a local payload struct on its own side.
+Also fix `ports.MembershipReader`'s misleading doc comment, and decide whether
+membership role and assignment are two sources of truth or one (they currently
+disagree, silently).
+
+**Expected tests** (integration): a tenant's creator can immediately read
+`GET /api/v1/roles` (the 403 is gone); an invitee who accepts gains their role's
+permissions; removing a member revokes them; redelivery of `member.joined` does
+not duplicate assignments; a member's permissions are the union of their roles'.
 
 ### T-016 · Authorization module (dynamic RBAC) · **M** · ✅ DONE (PR #19)
 **Depends on**: T-010, T-014. **Spec**: PLAN.md §3.
@@ -697,12 +771,12 @@ invitation).
 
 **Notes**: the invite role picker reads `GET /api/v1/roles` so custom roles are
 invitable, falling back to the seeded `owner|admin|member` when roles are
-unreadable. That fallback is **load-bearing today, not defensive**: because the
-tenant creator gets no membership (**T-031**), they hold no role, so `role:read`
-is denied and `GET /api/v1/roles` returns **403 for the very person doing the
-inviting** — verified against a live server. Without the fallback the invite form
-would be broken for everyone. Once T-031 lands, the picker starts showing the
-tenant's real roles with no further change.
+unreadable. That fallback is **load-bearing today, not defensive**: `GET
+/api/v1/roles` returns **403 to every user**, including the person doing the
+inviting — verified against a live server. The cause is **T-032** (nothing ever
+writes a role assignment, so no user holds any permission), not T-031. Without
+the fallback the invite form would be broken for everyone. Once T-032 lands, the
+picker starts showing the tenant's real roles with no further change.
 The accept/decline page is public and takes both ids
 (`/invitations/:tenantId/:invId`) because there is no invite token — the backend
 authorizes by matching the signed-in user's email. A newly created tenant also

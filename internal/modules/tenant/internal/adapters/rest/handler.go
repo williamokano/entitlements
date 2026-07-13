@@ -42,7 +42,15 @@ func createTenant(svc *service.Service) http.HandlerFunc {
 			httpx.WriteProblem(w, r, apperr.Validation("invalid request body"))
 			return
 		}
-		info, err := svc.Create(r.Context(), body.Slug, body.Name, body.Settings)
+		// Creating a tenant does not require authentication (a signup can
+		// precede any account), but when a user *is* signed in they become the
+		// tenant's owner — otherwise they would have no membership in the tenant
+		// they just created, and no way to gain one.
+		var creator *service.Creator
+		if u, ok := optionalUser(r); ok {
+			creator = &service.Creator{UserID: u.subject, Email: u.email}
+		}
+		info, err := svc.Create(r.Context(), body.Slug, body.Name, body.Settings, creator)
 		if err != nil {
 			httpx.WriteProblem(w, r, err)
 			return
