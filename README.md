@@ -176,9 +176,15 @@ Implemented (tasks **T-001 – T-026**):
   flow (public plan + billing-cycle picker); a change-plan flow (immediate re-pin
   vs a scheduled-for-period-end downgrade with a cancel-change button); and an
   addons section (quantity steppers, attach from compatible published addons,
-  detach with a confirm). The remaining module screens (members, roles) are
-  placeholder pages until their **F-track** cards land — see
-  [`docs/FRONTEND.md`](docs/FRONTEND.md).
+  detach with a confirm). The **billing invoices** screen is live too (F-013,
+  under `/billing`): a tenant invoice list (number, status, issued date,
+  currency, total — all money formatted from integer minor units) and an invoice
+  detail with its snapshotted line items, a subtotal/tax/total breakdown,
+  lifecycle actions **gated by the backend state machine** (pay/void/mark
+  uncollectible, shown per status), and a credit-note affordance (amount +
+  mandatory reason) listing existing credit notes with their negated amounts. The
+  remaining module screens (members, roles) are placeholder pages until their
+  **F-track** cards land — see [`docs/FRONTEND.md`](docs/FRONTEND.md).
 
 The admin SPA also ships as a **generic Docker image** (F-002): one image built
 once, configured entirely at container start via environment variables (API URL,
@@ -186,9 +192,8 @@ tenant mode, branding, demo toggle) — see *Running the admin SPA in Docker*
 below. `docker compose up` now brings up Postgres, the API, and the SPA together.
 
 Not yet implemented: the rest of **billing** — dunning + proration (T-027); the
-remaining frontend module screens
-(members, roles, the entitlements viewer, overrides admin, the usage/quota
-panel, and the billing invoices screen — F-005, F-007, F-010–F-013). See
+remaining frontend module screens (members, roles, the entitlements viewer,
+overrides admin, and the usage/quota panel — F-005, F-007, F-010–F-012). See
 [`docs/TASKS.md`](docs/TASKS.md) for the full plan.
 (Note: the tenant creator is not yet auto-assigned the `owner` role, so an
 initial role assignment currently has to be bootstrapped out of band — see the
