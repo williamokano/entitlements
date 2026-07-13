@@ -41,6 +41,12 @@ type Repository interface {
 	ListOverrides(ctx context.Context, tenantID uuid.UUID) ([]*domain.Override, error)
 	DeleteOverride(ctx context.Context, tenantID, id uuid.UUID) error
 	ListExpiredOverrides(ctx context.Context, now time.Time) ([]*domain.Override, error)
+
+	ConsumeHard(ctx context.Context, tenantID uuid.UUID, key, periodKey string, n, limit int64, now time.Time) (int64, bool, error)
+	Increment(ctx context.Context, tenantID uuid.UUID, key, periodKey string, n int64, now time.Time) (int64, error)
+	ClaimWarning(ctx context.Context, tenantID uuid.UUID, key, periodKey string, now time.Time) (bool, error)
+	Release(ctx context.Context, tenantID uuid.UUID, key, periodKey string, n int64, now time.Time) (int64, error)
+	GetUsed(ctx context.Context, tenantID uuid.UUID, key, periodKey string) (int64, error)
 }
 
 // CatalogReader is the slice of the catalog the resolver reads: the pinned plan
@@ -256,6 +262,12 @@ func (s *Service) Materialize(ctx context.Context, tenantID uuid.UUID) error {
 			return nil // no change: no rewrite, no event
 		}
 		now := s.clk.Now().UTC()
+		// Downgrade grace: if a limit shrank below current usage, emit
+		// EntitlementExceeded (once) before rewriting the set. Reads keep serving;
+		// only future consumes are gated by the new, smaller limit.
+		if err := s.emitDowngradeExceeded(ctx, tenantID, stored, resolved); err != nil {
+			return err
+		}
 		if err := s.repo.ReplaceEffective(ctx, tenantID, resolved, now); err != nil {
 			return err
 		}

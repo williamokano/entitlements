@@ -18,7 +18,7 @@ conventions.
 core) in progress.** The API boots, runs its migrations on startup, and serves
 real endpoints.
 
-Implemented (tasks **T-001 – T-023**):
+Implemented (tasks **T-001 – T-024**):
 
 - **Platform kernel** — config, UUIDv7 IDs, clock, Postgres pool + UnitOfWork
   (tx-in-context), migration runner, transactional outbox + relay worker,
@@ -96,8 +96,20 @@ Implemented (tasks **T-001 – T-023**):
   surfaces `expires_at` when the winning value is a time-bound override. Every
   override change re-materializes the tenant's effective set (emitting
   `EntitlementsSummaryChanged`) in the same transaction as the write + audit.
-  Usage/consume (T-024) is the next card. (Registry admin CRUD is service-level
-  for now; the runtime HTTP surface is the GETs plus overrides CRUD.)
+  **Usage tracking + quota enforcement** (T-024) meters `limit` features:
+  `POST /entitlements/consume` `{key, n}` increments a per-(tenant, feature,
+  period) counter through a **single guarded SQL upsert**, so a **hard** limit is
+  never exceeded even under maximal concurrency — a breach returns a typed
+  quota-exceeded **problem+json (HTTP 422)** — while a **soft** limit always
+  consumes and emits one `EntitlementLimitWarning` per crossing.
+  `POST /entitlements/release`, `GET /entitlements/usage`, and
+  `GET /entitlements/usage/{key}` round out the surface. The period key is derived
+  **lazily** from the feature's `reset_period` (`never` | calendar month | the
+  subscription's billing cycle), so a new period resets the counter with no
+  background job; and a **downgrade** that shrinks a limit below current usage
+  emits one `EntitlementExceeded` and never blocks reads (only future consumes are
+  gated). (Registry admin CRUD is service-level for now; the runtime HTTP surface
+  is the GETs, overrides CRUD, and the usage/consume endpoints.)
 - **Example** module (`/api/v1/example/things`) — a reference tenant-scoped
   slice demonstrating the full hexagonal shape and the outbox → consumer flow.
 
@@ -129,10 +141,10 @@ once, configured entirely at container start via environment variables (API URL,
 tenant mode, branding, demo toggle) — see *Running the admin SPA in Docker*
 below. `docker compose up` now brings up Postgres, the API, and the SPA together.
 
-Not yet implemented: entitlements **usage/consume + quotas** (T-024) and billing
-(the rest of Milestone 3); the remaining frontend module screens (members, roles,
-catalog, subscription, and the entitlements viewer + overrides admin — F-005,
-F-007–F-011). See [`docs/TASKS.md`](docs/TASKS.md) for the full plan.
+Not yet implemented: **billing** (the rest of Milestone 3); the remaining
+frontend module screens (members, roles, catalog, subscription, the entitlements
+viewer + overrides admin, and the usage/quota panel — F-005, F-007–F-012). See
+[`docs/TASKS.md`](docs/TASKS.md) for the full plan.
 (Note: the tenant creator is not yet auto-assigned the `owner` role, so an
 initial role assignment currently has to be bootstrapped out of band — see the
 T-016 follow-up in the tasks doc.)
@@ -211,7 +223,38 @@ curl -s localhost:8080/api/v1/entitlements/seats \
 curl -sX DELETE localhost:8080/api/v1/entitlements/overrides/<override-id> \
   -H 'Authorization: Bearer <access-token>' -H 'X-Tenant-ID: <tenant-uuid>'
 # → 204; the effective value reverts to plan + addons (20, source "addon")
+
+# Meter a `limit` feature. Consume increments a per-(tenant, feature, period)
+# counter through a single guarded upsert, so a hard limit is never exceeded even
+# under concurrency. Say the feature `api_calls` (type limit, limit_behavior hard)
+# resolves to 3 for this tenant:
+curl -sX POST localhost:8080/api/v1/entitlements/consume \
+  -H 'content-type: application/json' \
+  -H 'Authorization: Bearer <access-token>' -H 'X-Tenant-ID: <tenant-uuid>' \
+  -d '{"key":"api_calls","n":1}'
+# → 200 {"key":"api_calls","used":1,"limit":3,"behavior":"hard","period":"never",…}
+# … three consumes succeed (used 1 → 2 → 3); the fourth breaches the hard limit:
+# → 422 application/problem+json
+#   {"title":"Unprocessable Entity","status":422,"detail":"quota exceeded for feature api_calls", …}
+
+# Give capacity back (floored at zero), then read usage — for one feature or all.
+curl -sX POST localhost:8080/api/v1/entitlements/release \
+  -H 'content-type: application/json' \
+  -H 'Authorization: Bearer <access-token>' -H 'X-Tenant-ID: <tenant-uuid>' \
+  -d '{"key":"api_calls","n":2}'                                   # → used back to 1
+curl -s localhost:8080/api/v1/entitlements/usage/api_calls \
+  -H 'Authorization: Bearer <access-token>' -H 'X-Tenant-ID: <tenant-uuid>'
+# → {"key":"api_calls","used":1,"limit":3,"behavior":"hard","period":"never", …}
+curl -s localhost:8080/api/v1/entitlements/usage \
+  -H 'Authorization: Bearer <access-token>' -H 'X-Tenant-ID: <tenant-uuid>'
+# → {"usage":[{"key":"api_calls","used":1,"limit":3, …}]}
 ```
+
+A `limit` feature is registered service-level for now (registry admin CRUD has no
+HTTP surface yet). A soft-limit feature never refuses a consume; it emits one
+`EntitlementLimitWarning` the first time usage crosses the limit. Period reset is
+lazy: for a `monthly` or `billing_cycle` feature the counter starts fresh in each
+new period with no background job.
 
 Verification and password-reset emails are **logged, not sent** by the dev
 `EmailSender` — grab the link from `make run`'s output (a `dev email (not

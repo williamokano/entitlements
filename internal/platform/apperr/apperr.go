@@ -32,6 +32,9 @@ const (
 	KindNotFound
 	// KindConflict means the request conflicts with current state (HTTP 409).
 	KindConflict
+	// KindQuotaExceeded means a metered limit would be breached by the request
+	// (HTTP 422). The request is well-formed; the tenant is simply out of quota.
+	KindQuotaExceeded
 )
 
 // String returns a stable, lowercase identifier for the Kind.
@@ -47,6 +50,8 @@ func (k Kind) String() string {
 		return "not_found"
 	case KindConflict:
 		return "conflict"
+	case KindQuotaExceeded:
+		return "quota_exceeded"
 	default:
 		return "internal"
 	}
@@ -99,6 +104,9 @@ func Validation(message string) *Error { return New(KindValidation, message) }
 
 // Conflict builds a KindConflict error.
 func Conflict(message string) *Error { return New(KindConflict, message) }
+
+// QuotaExceeded builds a KindQuotaExceeded error (a metered limit was reached).
+func QuotaExceeded(message string) *Error { return New(KindQuotaExceeded, message) }
 
 // Unauthorized builds a KindUnauthorized error.
 func Unauthorized(message string) *Error { return New(KindUnauthorized, message) }

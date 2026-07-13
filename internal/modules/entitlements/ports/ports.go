@@ -28,6 +28,52 @@ type EntitlementsSummaryChanged struct {
 	Entitlements map[string]SummaryEntry `json:"entitlements"`
 }
 
+// EventEntitlementLimitWarning is published the first time a consume crosses a
+// soft limit within a period (before ≤ limit < after). It fires exactly once per
+// crossing — the crossing consume claims a per-period latch — so downstream
+// (notifications, webhooks) can nudge the tenant without spamming.
+const EventEntitlementLimitWarning = "entitlements.limit_warning"
+
+// EventEntitlementExceeded is published when a tenant's effective limit shrinks
+// below its current usage (a downgrade or override reduction). It is emitted once
+// per shrink and never blocks reads; only future consumes are gated by the new
+// limit.
+const EventEntitlementExceeded = "entitlements.exceeded"
+
+// UsageEvent is the shared payload of the limit-warning and exceeded events: the
+// feature, the tenant, and the usage/limit at the moment the event fired.
+type UsageEvent struct {
+	TenantID   uuid.UUID `json:"tenant_id"`
+	FeatureKey string    `json:"feature_key"`
+	Used       int64     `json:"used"`
+	Limit      int64     `json:"limit"`
+	Period     string    `json:"period"`
+}
+
+// Usage is a metered feature's current consumption for a tenant: how much of the
+// effective limit has been used in the current period. Unlimited is set when the
+// feature carries no numeric limit (e.g. an unknown feature under allow policy),
+// in which case Limit is not meaningful.
+type Usage struct {
+	Key       string
+	Used      int64
+	Limit     int64
+	Unlimited bool
+	Period    string
+	Behavior  string
+}
+
+// UsageReader is the entitlements module's metered-quota facade for other
+// modules: consume against a limit (atomically, honoring hard/soft behavior),
+// release, and read current usage. Consume returns a KindQuotaExceeded error
+// when a hard limit would be breached.
+type UsageReader interface {
+	ConsumeQuota(ctx context.Context, tenantID uuid.UUID, key string, n int64) (Usage, error)
+	ReleaseQuota(ctx context.Context, tenantID uuid.UUID, key string, n int64) (Usage, error)
+	GetUsage(ctx context.Context, tenantID uuid.UUID, key string) (Usage, error)
+	ListUsage(ctx context.Context, tenantID uuid.UUID) ([]Usage, error)
+}
+
 // Entitlement is a single resolved entitlement other modules read. ExpiresAt is
 // set only when the effective value comes from a time-bound override, so callers
 // can see when it will revert.

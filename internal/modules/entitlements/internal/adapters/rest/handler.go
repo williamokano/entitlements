@@ -28,10 +28,127 @@ func New(svc *service.Service) http.Handler {
 	mux.HandleFunc("GET /overrides/{id}", getOverride(svc))
 	mux.HandleFunc("PATCH /overrides/{id}", updateOverride(svc))
 	mux.HandleFunc("DELETE /overrides/{id}", deleteOverride(svc))
+	// Metered usage: consume/release against a limit, and read current usage.
+	mux.HandleFunc("POST /consume", consume(svc))
+	mux.HandleFunc("POST /release", release(svc))
+	mux.HandleFunc("GET /usage", listUsage(svc))
+	mux.HandleFunc("GET /usage/{key}", getUsage(svc))
 	// Runtime reads.
 	mux.HandleFunc("GET /", getAll(svc))
 	mux.HandleFunc("GET /{key}", getOne(svc))
 	return mux
+}
+
+// consumeBody is the consume/release payload: how many units of a feature.
+type consumeBody struct {
+	Key string `json:"key"`
+	N   int64  `json:"n"`
+}
+
+// consume applies n units against a metered feature's limit. A hard-limit breach
+// returns a typed quota-exceeded problem+json (HTTP 422).
+func consume(svc *service.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := usageTenant(w, r)
+		if !ok {
+			return
+		}
+		var body consumeBody
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			httpx.WriteProblem(w, r, apperr.Validation("invalid request body"))
+			return
+		}
+		u, err := svc.ConsumeQuota(r.Context(), tenantID, body.Key, body.N)
+		if err != nil {
+			httpx.WriteProblem(w, r, err)
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, usageResponse(u))
+	}
+}
+
+// release returns n units to a metered feature's current period.
+func release(svc *service.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := usageTenant(w, r)
+		if !ok {
+			return
+		}
+		var body consumeBody
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			httpx.WriteProblem(w, r, apperr.Validation("invalid request body"))
+			return
+		}
+		u, err := svc.ReleaseQuota(r.Context(), tenantID, body.Key, body.N)
+		if err != nil {
+			httpx.WriteProblem(w, r, err)
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, usageResponse(u))
+	}
+}
+
+// getUsage reports one metered feature's current usage.
+func getUsage(svc *service.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := usageTenant(w, r)
+		if !ok {
+			return
+		}
+		u, err := svc.GetUsage(r.Context(), tenantID, r.PathValue("key"))
+		if err != nil {
+			httpx.WriteProblem(w, r, err)
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, usageResponse(u))
+	}
+}
+
+// listUsage reports current usage for every active limit feature.
+func listUsage(svc *service.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := usageTenant(w, r)
+		if !ok {
+			return
+		}
+		us, err := svc.ListUsage(r.Context(), tenantID)
+		if err != nil {
+			httpx.WriteProblem(w, r, err)
+			return
+		}
+		out := make([]map[string]any, 0, len(us))
+		for _, u := range us {
+			out = append(out, usageResponse(u))
+		}
+		httpx.WriteJSON(w, http.StatusOK, map[string]any{"usage": out})
+	}
+}
+
+// usageTenant enforces auth and resolves the tenant for a usage request.
+func usageTenant(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	if !requireAuth(w, r) {
+		return uuid.Nil, false
+	}
+	tenantID, err := authctx.MustTenant(r.Context())
+	if err != nil {
+		httpx.WriteProblem(w, r, apperr.Validation("tenant not specified"))
+		return uuid.Nil, false
+	}
+	return tenantID, true
+}
+
+func usageResponse(u service.UsageView) map[string]any {
+	resp := map[string]any{
+		"key":       u.Key,
+		"used":      u.Used,
+		"period":    u.Period,
+		"behavior":  u.Behavior,
+		"unlimited": u.Unlimited,
+	}
+	if !u.Unlimited {
+		resp["limit"] = u.Limit
+	}
+	return resp
 }
 
 // getAll returns the tenant's whole effective set in one call.

@@ -446,7 +446,7 @@ affected tenants; every change audited; override changes trigger re-materializat
 **Paired frontend**: override admin UI — see **F-011** below (the T-022 viewer
 F-010 is read-only; overrides CRUD is a new screen).
 
-### T-024 · Entitlements: usage tracking + quota enforcement · **M**
+### T-024 · Entitlements: usage tracking + quota enforcement · **M** · ✅ DONE (PR #TBD)
 **Depends on**: T-022.
 **Deliverables**: usage counters per (tenant, feature, period); `ConsumeQuota(ctx, key, n)` — single-statement atomic check-and-increment honoring hard limits (typed `QuotaExceeded`) and soft limits (consume + `EntitlementLimitWarning` event); `ReleaseQuota`, `GetUsage`; lazy period reset per feature `reset_period`; downgrade grace: shrunk limit below usage ⇒ `EntitlementExceeded` event, never blocks reads; REST consume/usage endpoints.
 **Acceptance criteria**: hard limits are never exceeded even under maximal concurrency; soft limits warn exactly once per crossing; period reset needs no background job; downgrade never breaks a tenant.
@@ -458,6 +458,23 @@ F-010 is read-only; overrides CRUD is a new screen).
 - integration: `TestDowngradeBelowUsageEmitsExceededAndKeepsServing` — reads still succeed; event emitted once.
 - unit: `TestConsumeValidation` — n<=0 rejected; unknown feature per policy.
 - integration (HTTP): `TestConsumeEndpointAndUsageEndpoint` — 200 consume, 409/422 on exceeded (typed problem+json).
+
+**Note (implemented, PR #TBD)**: usage counters live in `entitlements.usage_counters`
+keyed by `(tenant_id, feature_key, period_key)`; `period_key` is derived lazily
+from the feature's `reset_period` (`never` | `YYYY-MM` for monthly | the
+subscription's current-period start for `billing_cycle`), so a new period is a
+new key with a fresh zero counter — no reset job. Hard enforcement is a single
+guarded upsert (`INSERT … SELECT … WHERE n ≤ limit ON CONFLICT DO UPDATE …
+WHERE used + n ≤ limit RETURNING used`): the guard lives in SQL, so N racing
+callers over limit L yield exactly L accepted consumes; a no-row result maps to
+the new `apperr.KindQuotaExceeded` (HTTP **422** problem+json). Soft limits
+always consume and claim a per-period `warned` latch so exactly one crosser emits
+`EntitlementLimitWarning`. Downgrade grace runs inside `Materialize` (already
+change-gated + idempotent): a limit that shrinks below current usage emits one
+`EntitlementExceeded` and never blocks reads. REST: `POST /entitlements/consume`,
+`POST /entitlements/release`, `GET /entitlements/usage`, `GET /entitlements/usage/{key}`.
+Other modules consume via `ports.UsageReader` (`Module.UsagePort()`). **Frontend**:
+paired **F-012** (usage/quota display on the Entitlements page).
 
 ### T-025 · Billing: invoices + line-item snapshots · **M**
 **Depends on**: T-019. **Spec**: PLAN.md §7.
@@ -660,6 +677,20 @@ source badge (and its `expires_at`) show immediately. Surface validation errors
 `expires_at` is set; creating without a reason surfaces the 422 inline; a
 successful create refreshes the entitlements table to show the `override` source;
 delete calls the endpoint and the row reverts to plan/addon/default.
+
+### F-012 · Usage & quota display · **S** *(backend: T-024 — merged)*
+**Depends on**: F-010.
+**Screens**: a usage panel on the Entitlements page listing each metered (`limit`)
+feature with its current `used` / `limit`, period key, and behavior (soft/hard) —
+a progress bar per feature, an "over limit" indicator when `used > limit`
+(downgrade grace), and an "unlimited" state when no numeric limit applies.
+Optionally a "consume"/"release" affordance for demo/testing. Consume surfaces the
+`422` quota-exceeded problem+json inline.
+**Endpoints**: `GET /api/v1/entitlements/usage`, `GET /api/v1/entitlements/usage/{key}`,
+`POST /api/v1/entitlements/consume`, `POST /api/v1/entitlements/release`.
+**Expected tests** (MSW): the panel renders used/limit per feature; a feature at or
+over its limit shows the over-limit indicator; a consume that returns 422 surfaces
+the quota-exceeded message; an unlimited feature renders without a bar.
 
 ---
 
