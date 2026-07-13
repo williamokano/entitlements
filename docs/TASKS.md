@@ -476,7 +476,7 @@ change-gated + idempotent): a limit that shrinks below current usage emits one
 Other modules consume via `ports.UsageReader` (`Module.UsagePort()`). **Frontend**:
 paired **F-012** (usage/quota display on the Entitlements page).
 
-### T-025 · Billing: invoices + line-item snapshots · **M** · ✅ DONE (PR #<pending>)
+### T-025 · Billing: invoices + line-item snapshots · **M** · ✅ DONE (PR #38)
 **Depends on**: T-019. **Spec**: PLAN.md §7.
 **Deliverables**: `Invoice` aggregate (`draft→open→paid|void|uncollectible`); line items snapshotting plan/addon name, version, unit price, quantity, currency at issuance (copied values); per-tenant gapless invoice number sequence; totals in minor units; `TaxCalculator` port (no-op default); credit notes; REST list/get.
 **Acceptance criteria**: an issued invoice is a historical fact — later catalog changes never alter it; numbering is per-tenant, gapless, concurrency-safe; lifecycle transitions guarded.
