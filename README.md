@@ -18,7 +18,7 @@ conventions.
 core) in progress.** The API boots, runs its migrations on startup, and serves
 real endpoints.
 
-Implemented (tasks **T-001 – T-024**):
+Implemented (tasks **T-001 – T-025**):
 
 - **Platform kernel** — config, UUIDv7 IDs, clock, Postgres pool + UnitOfWork
   (tx-in-context), migration runner, transactional outbox + relay worker,
@@ -110,6 +110,25 @@ Implemented (tasks **T-001 – T-024**):
   emits one `EntitlementExceeded` and never blocks reads (only future consumes are
   gated). (Registry admin CRUD is service-level for now; the runtime HTTP surface
   is the GETs, overrides CRUD, and the usage/consume endpoints.)
+- **Billing** module (`/api/v1/billing`) — invoices with **line-item snapshots**
+  (T-025). `POST /billing/invoices` issues an invoice from the tenant's live
+  subscription: it **copies** the pinned plan version and each attached addon
+  (key, version, unit price, quantity, currency) into line items, so an issued
+  invoice is a historical fact — a later plan-version publish, rename, or price
+  change never rewrites it. Money is integer minor units throughout (never
+  floats); totals are `subtotal = Σ(unit × qty)`, `total = subtotal + tax`, with
+  tax from a pluggable **`TaxCalculator`** port (no-op default → zero tax). Each
+  invoice gets a **per-tenant gapless number** (1, 2, 3…) allocated by an atomic
+  counter upsert inside the issuing transaction — no gaps or dupes even under
+  concurrent issuance, and independent per tenant. The invoice lifecycle
+  `draft → open → paid | void | uncollectible` is a guarded state machine
+  (`POST /billing/invoices/{id}/{pay,void,uncollectible}`); paying an invoice
+  publishes `billing.invoice_paid` through the outbox so the subscription module
+  advances its period. **Credit notes** (`POST /billing/invoices/{id}/credit-notes`
+  `{amount_minor, reason}`) reference an invoice and store a negated amount. List
+  and get (`GET /billing/invoices[/{id}]`) are tenant-scoped — another tenant's
+  invoices are invisible. (The PaymentProvider/charge flow and dunning are T-026 /
+  T-027.)
 - **Example** module (`/api/v1/example/things`) — a reference tenant-scoped
   slice demonstrating the full hexagonal shape and the outbox → consumer flow.
 
@@ -156,9 +175,10 @@ once, configured entirely at container start via environment variables (API URL,
 tenant mode, branding, demo toggle) — see *Running the admin SPA in Docker*
 below. `docker compose up` now brings up Postgres, the API, and the SPA together.
 
-Not yet implemented: **billing** (the rest of Milestone 3); the remaining
-frontend module screens (members, roles, the entitlements viewer, overrides
-admin, and the usage/quota panel — F-005, F-007, F-010–F-012). See
+Not yet implemented: the rest of **billing** — the PaymentProvider/charge flow
+and dunning + proration (T-026, T-027); the remaining frontend module screens
+(members, roles, the entitlements viewer, overrides admin, the usage/quota
+panel, and the billing invoices screen — F-005, F-007, F-010–F-013). See
 [`docs/TASKS.md`](docs/TASKS.md) for the full plan.
 (Note: the tenant creator is not yet auto-assigned the `owner` role, so an
 initial role assignment currently has to be bootstrapped out of band — see the
@@ -263,6 +283,38 @@ curl -s localhost:8080/api/v1/entitlements/usage/api_calls \
 curl -s localhost:8080/api/v1/entitlements/usage \
   -H 'Authorization: Bearer <access-token>' -H 'X-Tenant-ID: <tenant-uuid>'
 # → {"usage":[{"key":"api_calls","used":1,"limit":3, …}]}
+
+# Issue an invoice from the tenant's live subscription. Its line items snapshot
+# the pinned plan version (and any attached addons): key, version, unit price,
+# quantity, currency — all copied, so later catalog changes never rewrite it. The
+# invoice gets a per-tenant gapless number (1, 2, 3…) and integer minor-unit totals.
+curl -sX POST localhost:8080/api/v1/billing/invoices \
+  -H 'Authorization: Bearer <access-token>' -H 'X-Tenant-ID: <tenant-uuid>'
+# → 201 {"id":"<invoice-uuid>","number":1,"status":"open","currency":"USD",
+#        "subtotal_minor":1000,"tax_minor":0,"total_minor":1000,
+#        "line_items":[{"kind":"plan","key":"pro","version":1,
+#                       "unit_price_minor":1000,"quantity":1,"amount_minor":1000, …}]}
+
+curl -s localhost:8080/api/v1/billing/invoices \
+  -H 'Authorization: Bearer <access-token>' -H 'X-Tenant-ID: <tenant-uuid>'
+# → {"invoices":[{ …the invoice above… }]}   (tenant-scoped — other tenants invisible)
+
+# Publish a new plan version / change the price in the catalog, then re-read the
+# invoice: it is unchanged (a historical fact).
+curl -s localhost:8080/api/v1/billing/invoices/<invoice-uuid> \
+  -H 'Authorization: Bearer <access-token>' -H 'X-Tenant-ID: <tenant-uuid>'
+# → still {"line_items":[{"key":"pro","version":1,"unit_price_minor":1000, …}], …}
+
+# Lifecycle: pay the invoice (publishes billing.invoice_paid, which the
+# subscription module consumes to advance its period), then credit it.
+curl -sX POST localhost:8080/api/v1/billing/invoices/<invoice-uuid>/pay \
+  -H 'Authorization: Bearer <access-token>' -H 'X-Tenant-ID: <tenant-uuid>'
+# → {"status":"paid", …}
+curl -sX POST localhost:8080/api/v1/billing/invoices/<invoice-uuid>/credit-notes \
+  -H 'content-type: application/json' \
+  -H 'Authorization: Bearer <access-token>' -H 'X-Tenant-ID: <tenant-uuid>' \
+  -d '{"amount_minor":1000,"reason":"refund"}'
+# → 201 {"invoice_id":"<invoice-uuid>","number":1,"amount_minor":-1000,"reason":"refund", …}
 ```
 
 A `limit` feature is registered service-level for now (registry admin CRUD has no
