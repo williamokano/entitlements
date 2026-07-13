@@ -684,7 +684,7 @@ paired F-card).
 **Endpoints**: `POST|GET /api/v1/subscription`, `POST /api/v1/subscription/{cancel,pause,resume,reactivate,change-plan}`, `POST /api/v1/subscription/scheduled-change/cancel`, `POST /api/v1/subscription/addons`, `DELETE /api/v1/subscription/addons/{vid}`.
 **Expected tests** (MSW): active shows pause+cancel and not resume; paused shows resume; the cancel modal posts `immediate` true/false correctly; a 409 renders a conflict toast; the empty state shows the plan picker; a downgrade response renders the scheduled-change banner and its cancel button calls the endpoint; addon attach validates quantity and a 400 (incompatible) renders inline.
 
-### F-010 · Entitlements viewer · **S** *(backend: T-022 — merged)*
+### F-010 · Entitlements viewer · **S** *(backend: T-022 — merged)* · ✅ DONE (PR #41)
 **Depends on**: F-001.
 **Screens**: a read-only "Billing → Entitlements" page for the current tenant:
 a table of the tenant's effective entitlements (feature key, value, and a source
@@ -696,6 +696,29 @@ config/enum as their value. A per-feature drill-in reuses `GET
 **Expected tests** (MSW): the table renders the whole set from one call; the
 source badge reflects the winning layer; an empty/no-subscription tenant shows
 only `default`-sourced rows.
+**Delivered**: a read-only "Billing → Entitlements" surface under
+`admin/src/views/app/entitlements/` — `index.tsx` (effective-entitlements table
+fed by a SINGLE `GET /api/v1/entitlements` call, rows sorted by feature key),
+`detail.tsx` (per-feature drill-in reusing `GET /api/v1/entitlements/{key}`,
+shows value + source + override expiry), `api.ts` (typed client + `Source` /
+`Entitlement` types), `helpers.ts` (source labels/badge classes, value-kind
+inference, `formatValue`; re-uses catalog `errorMessage`/`formatDate`), and
+`components/{SourceBadge,ValueCell}.tsx`. Routes `/entitlements` +
+`/entitlements/:key` added in `routes/index.tsx` (behind `RequireAuth` /
+`RequireTenant`); an "Entitlements" item added to the Billing menu group in
+`layouts/components/app-data.ts`. Tests (MSW + RTL) in `Entitlements.test.tsx`:
+whole set from one call, per-value-type rendering (bool chip / limit number /
+config value), source badge reflects the winning layer, empty/no-subscription
+tenant shows only `default` rows, and the drill-in fetches by key + navigates
+from a row. **Backend-shape observation** (matters for F-011/F-012): the read
+endpoints return only `{ value, source, expires_at? }` per key — NOT the
+feature's declared type, so the UI infers how to render a value from its JSON
+runtime type (`boolean` → chip, `number` → limit, else config/enum). The map is
+nested under `entitlements` for the list and flat (`{ key, value, source,
+expires_at? }`) for the single-key read. **For F-011/F-012**: this page and its
+`api.ts`/`helpers.ts`/components now exist to extend — F-011 adds the overrides
+CRUD surface (refreshing this table on mutation) and F-012 adds the usage/quota
+panel; both build on top of this viewer.
 
 ### F-011 · Entitlement overrides admin · **S** *(backend: T-023 — merged)*
 **Depends on**: F-010.
